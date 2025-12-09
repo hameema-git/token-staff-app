@@ -1,54 +1,26 @@
-// client/src/App.jsx
-import React from "react";
-import { Switch, Route } from "wouter";
-import PlaceOrder from "./pages/home.jsx";
+import { Route, Switch } from "wouter";
 import StaffDashboard from "./pages/staff.jsx";
-import TokenStatus from "./pages/status.jsx";
 import ApprovedOrders from "./pages/approved.jsx";
-
-// export default function App() {
-//   return (
-//     <Switch>
-//       <Route path="/">
-//         <PlaceOrder />
-//       </Route>
-
-//       <Route path="/staff">
-//         <StaffDashboard />
-//       </Route>
-
-//       <Route path="/mytoken">
-//         <TokenStatus />
-//       </Route>
-//       <Route path="/approved">
-//   <ApprovedOrders />
-// </Route>
-
-
-//       <Route>
-//         <div>404 Page Not Found</div>
-//       </Route>
-//     </Switch>
-//   );
-// }
 
 export default function App() {
   return (
     <Switch>
-      {/* Redirect root path to staff login */}
+      {/* Default path shows staff login/dashboard */}
       <Route path="/">
-        <Redirect to="/staff" />
+        <StaffDashboard />
       </Route>
 
-      {/* Staff Dashboard */}
-      <Route path="/staff" component={StaffDashboard} />
+      <Route path="/approved">
+        <ApprovedOrders />
+      </Route>
 
-      {/* If using a separate login page */}
-      <Route path="/login" component={StaffLoginPage} />
+      {/* Optional alias */}
+      <Route path="/staff">
+        <StaffDashboard />
+      </Route>
 
-      {/* Catch-all route */}
       <Route>
-        <Redirect to="/staff" />
+        <div>404 - Not Found</div>
       </Route>
     </Switch>
   );
