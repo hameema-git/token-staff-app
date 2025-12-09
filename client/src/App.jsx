@@ -1,3 +1,5 @@
+import React from "react";
+
 import { Route, Switch } from "wouter";
 import StaffDashboard from "./pages/staff.jsx";
 import ApprovedOrders from "./pages/approved.jsx";
