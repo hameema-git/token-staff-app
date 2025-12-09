@@ -120,20 +120,58 @@ export default function StaffDashboard() {
   // -------------------------------
   // START NEW SESSION
   // -------------------------------
-  async function startNewSession() {
-    const currentNum = Number(session.split(" ")[1] || 1);
-    const newSession = `Session ${currentNum + 1}`;
+  // async function startNewSession() {
+  //   const currentNum = Number(session.split(" ")[1] || 1);
+  //   const newSession = `Session ${currentNum + 1}`;
 
+  //   // Update Firestore
+  //   await setDoc(doc(db, "settings", "activeSession"), {
+  //     session_id: newSession
+  //   });
+
+  //   // Update UI + local cache
+  //   setSession(newSession);
+  //   localStorage.setItem("session", newSession);
+
+  //   // Create token tracker
+  //   await setDoc(doc(db, "tokens", "session_" + newSession), {
+  //     session_id: newSession,
+  //     currentToken: 0,
+  //     lastTokenIssued: 0
+  //   });
+
+  //   alert("New session started: " + newSession);
+
+  //   fetchOrders();
+  // }
+  async function startNewSession() {
+  console.log("Start New Session clicked. Current session =", session);
+
+  // Ensure session format is valid
+  let currentNum = 1;
+
+  if (session && session.includes(" ")) {
+    const parts = session.split(" ");
+    const num = Number(parts[1]);
+    if (!isNaN(num)) currentNum = num;
+  }
+
+  const newSession = `Session ${currentNum + 1}`;
+  console.log("New session =", newSession);
+
+  try {
     // Update Firestore
     await setDoc(doc(db, "settings", "activeSession"), {
       session_id: newSession
     });
 
-    // Update UI + local cache
+    console.log("Firestore updated with new session!");
+
+    // Update UI + cache
     setSession(newSession);
     localStorage.setItem("session", newSession);
 
-    // Create token tracker
+    // Create token counter doc
     await setDoc(doc(db, "tokens", "session_" + newSession), {
       session_id: newSession,
       currentToken: 0,
@@ -141,9 +179,13 @@ export default function StaffDashboard() {
     });
 
     alert("New session started: " + newSession);
-
     fetchOrders();
+  } catch (err) {
+    console.error("ERROR updating session:", err);
+    alert("Failed to start new session. See console.");
   }
+}
+
 
   // -------------------------------
   // DELETE ORDER
