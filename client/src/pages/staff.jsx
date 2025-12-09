@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { auth, db, serverTimestamp } from "../firebaseInit";
+
 import {
   signInWithEmailAndPassword,
   signOut,
@@ -16,6 +17,7 @@ import {
   doc,
   runTransaction,
   setDoc,
+  getDoc,
   deleteDoc,
   updateDoc
 } from "firebase/firestore";
@@ -26,26 +28,46 @@ export default function StaffDashboard() {
   const [isStaff, setIsStaff] = useState(false);
   const [orders, setOrders] = useState([]);
 
-  // ⭐ CURRENT SESSION
-  const [session, setSession] = useState(
-    localStorage.getItem("session") || "Session 1"
-  );
+  // ⭐ GLOBAL SESSION — loaded from Firestore
+  const [session, setSession] = useState("Session 1");
 
   const [loading, setLoading] = useState(false);
+
+  // -------------------------------
+  // LOAD ACTIVE SESSION FROM FIRESTORE
+  // -------------------------------
+  useEffect(() => {
+    async function loadActiveSession() {
+      try {
+        const ref = doc(db, "settings", "activeSession");
+        const snap = await getDoc(ref);
+
+        if (snap.exists()) {
+          const s = snap.data().session_id;
+          setSession(s);
+          localStorage.setItem("session", s);
+        }
+      } catch (err) {
+        console.error("Error fetching active session:", err);
+      }
+    }
+
+    loadActiveSession();
+  }, []);
 
   // -------------------------------
   // LOGIN HANDLING
   // -------------------------------
   useEffect(() => {
-    const unsub = onAuthStateChanged(auth, async (user) => {
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (!user) {
         setIsStaff(false);
         setOrders([]);
         return;
       }
 
-      const idTokenResult = await getIdTokenResult(user, true);
-      const role = idTokenResult.claims?.role;
+      const tokenResult = await getIdTokenResult(user, true);
+      const role = tokenResult.claims?.role;
 
       if (role === "staff") {
         setIsStaff(true);
@@ -56,7 +78,7 @@ export default function StaffDashboard() {
       }
     });
 
-    return () => unsub();
+    return () => unsubscribe();
   }, []);
 
   async function login(e) {
@@ -74,7 +96,7 @@ export default function StaffDashboard() {
   }
 
   // -------------------------------
-  // FETCH PENDING ORDERS (current session)
+  // FETCH ORDERS (only PENDING for current session)
   // -------------------------------
   async function fetchOrders() {
     setLoading(true);
@@ -87,11 +109,11 @@ export default function StaffDashboard() {
 
     const snap = await getDocs(q);
 
-    const filtered = snap.docs
+    const result = snap.docs
       .map(d => ({ id: d.id, ...d.data() }))
       .filter(o => o.status === "pending" && o.session_id === session);
 
-    setOrders(filtered);
+    setOrders(result);
     setLoading(false);
   }
 
@@ -99,20 +121,27 @@ export default function StaffDashboard() {
   // START NEW SESSION
   // -------------------------------
   async function startNewSession() {
-    const num = Number(session.split(" ")[1]);
-    const newSession = `Session ${num + 1}`;
+    const currentNum = Number(session.split(" ")[1] || 1);
+    const newSession = `Session ${currentNum + 1}`;
 
-    localStorage.setItem("session", newSession);
+    // Update Firestore
+    await setDoc(doc(db, "settings", "activeSession"), {
+      session_id: newSession
+    });
+
+    // Update UI + local cache
     setSession(newSession);
+    localStorage.setItem("session", newSession);
 
-    const tokenRef = doc(db, "tokens", "session_" + newSession);
-    await setDoc(tokenRef, {
+    // Create token tracker
+    await setDoc(doc(db, "tokens", "session_" + newSession), {
       session_id: newSession,
       currentToken: 0,
       lastTokenIssued: 0
     });
 
     alert("New session started: " + newSession);
+
     fetchOrders();
   }
 
@@ -121,6 +150,7 @@ export default function StaffDashboard() {
   // -------------------------------
   async function deleteOrder(id) {
     if (!window.confirm("Delete this order?")) return;
+
     await deleteDoc(doc(db, "orders", id));
     fetchOrders();
   }
@@ -129,10 +159,10 @@ export default function StaffDashboard() {
   // UPDATE ORDER
   // -------------------------------
   async function updateOrder(order) {
-    const newName = prompt("Update Name:", order.customerName);
+    const newName = prompt("Update name:", order.customerName);
     if (newName === null) return;
 
-    const newPhone = prompt("Update Phone:", order.phone);
+    const newPhone = prompt("Update phone:", order.phone);
     if (newPhone === null) return;
 
     const newItems = prompt(
@@ -165,22 +195,32 @@ export default function StaffDashboard() {
 
       await runTransaction(db, async (tx) => {
         const orderSnap = await tx.get(orderRef);
-        if (!orderSnap.exists()) throw new Error("Order gone");
+        if (!orderSnap.exists()) throw new Error("Order missing");
 
         const order = orderSnap.data();
-        if (order.status !== "pending") throw new Error("Not pending");
+        if (order.status !== "pending")
+          throw new Error("Already approved or invalid");
 
         const tokenRef = doc(db, "tokens", "session_" + session);
-        const tSnap = await tx.get(tokenRef);
+        const tokenSnap = await tx.get(tokenRef);
 
-        let last = tSnap.exists() ? tSnap.data().lastTokenIssued || 0 : 0;
+        let last = tokenSnap.exists()
+          ? tokenSnap.data().lastTokenIssued || 0
+          : 0;
+
         const next = last + 1;
 
-        tx.set(tokenRef, {
-          session_id: session,
-          currentToken: tSnap.exists() ? tSnap.data().currentToken : 0,
-          lastTokenIssued: next
-        }, { merge: true });
+        tx.set(
+          tokenRef,
+          {
+            session_id: session,
+            currentToken: tokenSnap.exists()
+              ? tokenSnap.data().currentToken
+              : 0,
+            lastTokenIssued: next
+          },
+          { merge: true }
+        );
 
         tx.update(orderRef, {
           token: next,
@@ -215,11 +255,12 @@ export default function StaffDashboard() {
         } else {
           const cur = snap.data().currentToken || 0;
           const last = snap.data().lastTokenIssued || 0;
+
           const next = Math.min(cur + 1, Math.max(last, cur + 1));
+
           tx.update(tokenRef, { currentToken: next });
         }
       });
-
     } catch (err) {
       alert("Next failed: " + err.message);
     }
@@ -241,8 +282,17 @@ export default function StaffDashboard() {
 
       {!isStaff && (
         <form onSubmit={login}>
-          <input value={email} onChange={e => setEmail(e.target.value)} placeholder="Email" /><br />
-          <input type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="Password" /><br />
+          <input
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="Email"
+          /><br />
+          <input
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            placeholder="Password"
+          /><br />
           <button type="submit">Login</button>
         </form>
       )}
@@ -250,52 +300,75 @@ export default function StaffDashboard() {
       {isStaff && (
         <div>
           <button onClick={callNext}>Call Next</button>
-          <button onClick={fetchOrders} style={{ marginLeft: 10 }}>Refresh</button>
-          <button onClick={logout} style={{ marginLeft: 10 }}>Logout</button>
+          <button onClick={fetchOrders} style={{ marginLeft: 10 }}>
+            Refresh
+          </button>
+          <button onClick={logout} style={{ marginLeft: 10 }}>
+            Logout
+          </button>
 
-          {/* ⭐ VIEW APPROVED ORDERS BUTTON */}
+          {/* View Approved Orders */}
           <button
             onClick={() => (window.location.href = "/approved")}
-            style={{ marginLeft: 10, background: "#6c5ce7", color: "white" }}
+            style={{
+              marginLeft: 10,
+              background: "#6c5ce7",
+              color: "white"
+            }}
           >
             View Approved Orders
           </button>
 
-          <h3 style={{ marginTop: 20 }}>Pending Orders (Current Session)</h3>
+          <h3 style={{ marginTop: 20 }}>
+            Pending Orders (Session: {session})
+          </h3>
 
           {loading && <div>Loading…</div>}
 
-          {!loading && orders.map(order => (
-            <div key={order.id} style={{
-              border: "1px solid #ddd",
-              padding: 12,
-              marginBottom: 10,
-              borderRadius: 6
-            }}>
-              <strong>{order.customerName}</strong> — {order.phone}
-              <div style={{ fontSize: 13 }}>
-                {(order.items || []).map(i => `${i.quantity}×${i.name}`).join(", ")}
+          {!loading &&
+            orders.map((order) => (
+              <div
+                key={order.id}
+                style={{
+                  border: "1px solid #ddd",
+                  padding: 12,
+                  marginBottom: 10,
+                  borderRadius: 6
+                }}
+              >
+                <strong>{order.customerName}</strong> — {order.phone}
+                <div style={{ fontSize: 13 }}>
+                  {(order.items || [])
+                    .map((i) => `${i.quantity}×${i.name}`)
+                    .join(", ")}
+                </div>
+
+                <button
+                  onClick={() => approveOrder(order.id)}
+                  style={{ marginTop: 8 }}
+                >
+                  Approve
+                </button>
+
+                <button
+                  onClick={() => updateOrder(order)}
+                  style={{ marginLeft: 10, background: "#ffaa00" }}
+                >
+                  Update
+                </button>
+
+                <button
+                  onClick={() => deleteOrder(order.id)}
+                  style={{
+                    marginLeft: 10,
+                    background: "red",
+                    color: "white"
+                  }}
+                >
+                  Delete
+                </button>
               </div>
-
-              <button onClick={() => approveOrder(order.id)} style={{ marginTop: 8 }}>
-                Approve
-              </button>
-
-              <button
-                onClick={() => updateOrder(order)}
-                style={{ marginLeft: 10, background: "#ffaa00" }}
-              >
-                Update
-              </button>
-
-              <button
-                onClick={() => deleteOrder(order.id)}
-                style={{ marginLeft: 10, background: "red", color: "white" }}
-              >
-                Delete
-              </button>
-            </div>
-          ))}
+            ))}
         </div>
       )}
     </div>
