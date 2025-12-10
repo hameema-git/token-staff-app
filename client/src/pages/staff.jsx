@@ -26,38 +26,54 @@ export default function StaffDashboard() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isStaff, setIsStaff] = useState(false);
+
   const [orders, setOrders] = useState([]);
 
-  // ⭐ GLOBAL SESSION — loaded from Firestore
-  const [session, setSession] = useState("Session 1");
+  const [session, setSession] = useState("Session 1"); // active session
+  const [sessions, setSessions] = useState([]);         // list of all sessions
+  const [selectedSession, setSelectedSession] = useState("");
 
   const [loading, setLoading] = useState(false);
 
-  // -------------------------------
-  // LOAD ACTIVE SESSION FROM FIRESTORE
-  // -------------------------------
+  // ---------------------------------------
+  // LOAD ACTIVE SESSION + ALL SESSIONS
+  // ---------------------------------------
   useEffect(() => {
-    async function loadActiveSession() {
+    async function loadSessions() {
       try {
+        // Load active session
         const ref = doc(db, "settings", "activeSession");
         const snap = await getDoc(ref);
 
-        if (snap.exists()) {
-          const s = snap.data().session_id;
-          setSession(s);
-          localStorage.setItem("session", s);
-        }
+        let active = "Session 1";
+        if (snap.exists()) active = snap.data().session_id;
+
+        setSession(active);
+        localStorage.setItem("session", active);
+
+        // Load list of all sessions from tokens collection
+        const tokenSnap = await getDocs(collection(db, "tokens"));
+        const sessionList = tokenSnap.docs
+          .map(d => d.id.replace("session_", ""))
+          .sort((a, b) => {
+            const na = Number(a.split(" ")[1]);
+            const nb = Number(b.split(" ")[1]);
+            return na - nb;
+          });
+
+        setSessions(sessionList);
+        setSelectedSession(active); // default selected session is the current active
       } catch (err) {
-        console.error("Error fetching active session:", err);
+        console.error("Error loading sessions:", err);
       }
     }
 
-    loadActiveSession();
+    loadSessions();
   }, []);
 
-  // -------------------------------
-  // LOGIN HANDLING
-  // -------------------------------
+  // ---------------------------------------
+  // AUTH HANDLING
+  // ---------------------------------------
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (!user) {
@@ -83,6 +99,7 @@ export default function StaffDashboard() {
 
   async function login(e) {
     e.preventDefault();
+
     try {
       await signInWithEmailAndPassword(auth, email.trim(), password.trim());
     } catch (err) {
@@ -95,9 +112,9 @@ export default function StaffDashboard() {
     setIsStaff(false);
   }
 
-  // -------------------------------
-  // FETCH ORDERS (only PENDING for current session)
-  // -------------------------------
+  // ---------------------------------------
+  // FETCH ORDERS (pending for selectedSession)
+  // ---------------------------------------
   async function fetchOrders() {
     setLoading(true);
 
@@ -109,87 +126,53 @@ export default function StaffDashboard() {
 
     const snap = await getDocs(q);
 
-    const result = snap.docs
+    const filtered = snap.docs
       .map(d => ({ id: d.id, ...d.data() }))
-      .filter(o => o.status === "pending" && o.session_id === session);
+      .filter(o => o.status === "pending" && o.session_id === selectedSession);
 
-    setOrders(result);
+    setOrders(filtered);
     setLoading(false);
   }
 
-  // -------------------------------
+  // ---------------------------------------
   // START NEW SESSION
-  // -------------------------------
-  // async function startNewSession() {
-  //   const currentNum = Number(session.split(" ")[1] || 1);
-  //   const newSession = `Session ${currentNum + 1}`;
-
-  //   // Update Firestore
-  //   await setDoc(doc(db, "settings", "activeSession"), {
-  //     session_id: newSession
-  //   });
-
-  //   // Update UI + local cache
-  //   setSession(newSession);
-  //   localStorage.setItem("session", newSession);
-
-  //   // Create token tracker
-  //   await setDoc(doc(db, "tokens", "session_" + newSession), {
-  //     session_id: newSession,
-  //     currentToken: 0,
-  //     lastTokenIssued: 0
-  //   });
-
-  //   alert("New session started: " + newSession);
-
-  //   fetchOrders();
-  // }
+  // ---------------------------------------
   async function startNewSession() {
-  console.log("Start New Session clicked. Current session =", session);
+    let currentNum = 1;
 
-  // Ensure session format is valid
-  let currentNum = 1;
+    if (session.includes(" ")) {
+      const num = Number(session.split(" ")[1]);
+      if (!isNaN(num)) currentNum = num;
+    }
 
-  if (session && session.includes(" ")) {
-    const parts = session.split(" ");
-    const num = Number(parts[1]);
-    if (!isNaN(num)) currentNum = num;
+    const newSession = `Session ${currentNum + 1}`;
+
+    try {
+      await setDoc(doc(db, "settings", "activeSession"), {
+        session_id: newSession
+      });
+
+      setSession(newSession);
+      setSelectedSession(newSession);
+      localStorage.setItem("session", newSession);
+
+      await setDoc(doc(db, "tokens", "session_" + newSession), {
+        session_id: newSession,
+        currentToken: 0,
+        lastTokenIssued: 0
+      });
+
+      alert("New session started: " + newSession);
+      fetchOrders();
+    } catch (err) {
+      console.error("ERROR updating session:", err);
+      alert("Failed to start new session.");
+    }
   }
 
-  const newSession = `Session ${currentNum + 1}`;
-  console.log("New session =", newSession);
-
-  try {
-    // Update Firestore
-    await setDoc(doc(db, "settings", "activeSession"), {
-      session_id: newSession
-    });
-
-    console.log("Firestore updated with new session!");
-
-    // Update UI + cache
-    setSession(newSession);
-    localStorage.setItem("session", newSession);
-
-    // Create token counter doc
-    await setDoc(doc(db, "tokens", "session_" + newSession), {
-      session_id: newSession,
-      currentToken: 0,
-      lastTokenIssued: 0
-    });
-
-    alert("New session started: " + newSession);
-    fetchOrders();
-  } catch (err) {
-    console.error("ERROR updating session:", err);
-    alert("Failed to start new session. See console.");
-  }
-}
-
-
-  // -------------------------------
+  // ---------------------------------------
   // DELETE ORDER
-  // -------------------------------
+  // ---------------------------------------
   async function deleteOrder(id) {
     if (!window.confirm("Delete this order?")) return;
 
@@ -197,9 +180,9 @@ export default function StaffDashboard() {
     fetchOrders();
   }
 
-  // -------------------------------
+  // ---------------------------------------
   // UPDATE ORDER
-  // -------------------------------
+  // ---------------------------------------
   async function updateOrder(order) {
     const newName = prompt("Update name:", order.customerName);
     if (newName === null) return;
@@ -208,7 +191,7 @@ export default function StaffDashboard() {
     if (newPhone === null) return;
 
     const newItems = prompt(
-      "Update Items (format: qty×name, qty×name ...):",
+      "Update Items (qty×name, ...):",
       order.items.map(i => `${i.quantity}×${i.name}`).join(", ")
     );
     if (newItems === null) return;
@@ -228,9 +211,9 @@ export default function StaffDashboard() {
     fetchOrders();
   }
 
-  // -------------------------------
+  // ---------------------------------------
   // APPROVE ORDER → assign token
-  // -------------------------------
+  // ---------------------------------------
   async function approveOrder(orderId) {
     try {
       const orderRef = doc(db, "orders", orderId);
@@ -240,8 +223,7 @@ export default function StaffDashboard() {
         if (!orderSnap.exists()) throw new Error("Order missing");
 
         const order = orderSnap.data();
-        if (order.status !== "pending")
-          throw new Error("Already approved or invalid");
+        if (order.status !== "pending") throw new Error("Already approved");
 
         const tokenRef = doc(db, "tokens", "session_" + session);
         const tokenSnap = await tx.get(tokenRef);
@@ -256,9 +238,7 @@ export default function StaffDashboard() {
           tokenRef,
           {
             session_id: session,
-            currentToken: tokenSnap.exists()
-              ? tokenSnap.data().currentToken
-              : 0,
+            currentToken: tokenSnap.exists() ? tokenSnap.data().currentToken : 0,
             lastTokenIssued: next
           },
           { merge: true }
@@ -278,9 +258,9 @@ export default function StaffDashboard() {
     }
   }
 
-  // -------------------------------
+  // ---------------------------------------
   // CALL NEXT TOKEN
-  // -------------------------------
+  // ---------------------------------------
   async function callNext() {
     try {
       const tokenRef = doc(db, "tokens", "session_" + session);
@@ -308,13 +288,39 @@ export default function StaffDashboard() {
     }
   }
 
-  // -------------------------------
+  // ---------------------------------------
   // UI
-  // -------------------------------
+  // ---------------------------------------
   return (
     <div style={{ padding: 20, maxWidth: 900, margin: "auto" }}>
       <h1>Staff Dashboard</h1>
-      <h2>Current Session: {session}</h2>
+      <h2>Active Session: {session}</h2>
+
+      {/* -------------------------
+          SESSION SELECT DROPDOWN
+      --------------------------*/}
+      {isStaff && (
+        <div style={{ marginTop: 10, marginBottom: 20 }}>
+          <label>Select Session to View Orders:</label>
+          <select
+            value={selectedSession}
+            onChange={(e) => {
+              setSelectedSession(e.target.value);
+              fetchOrders();
+            }}
+            style={{
+              padding: 8,
+              width: "100%",
+              fontSize: 16,
+              marginTop: 4
+            }}
+          >
+            {sessions.map(s => (
+              <option key={s} value={s}>{s}</option>
+            ))}
+          </select>
+        </div>
+      )}
 
       {isStaff && (
         <button onClick={startNewSession} style={{ marginBottom: 20 }}>
@@ -349,7 +355,6 @@ export default function StaffDashboard() {
             Logout
           </button>
 
-          {/* View Approved Orders */}
           <button
             onClick={() => (window.location.href = "/approved")}
             style={{
@@ -362,7 +367,7 @@ export default function StaffDashboard() {
           </button>
 
           <h3 style={{ marginTop: 20 }}>
-            Pending Orders (Session: {session})
+            Pending Orders (Session: {selectedSession})
           </h3>
 
           {loading && <div>Loading…</div>}

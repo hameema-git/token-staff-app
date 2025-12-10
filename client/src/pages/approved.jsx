@@ -114,7 +114,7 @@ export default function ApprovedOrders() {
         ))}
       </select>
 
-      ⭐ SEARCH BAR
+    
       {/* <input
         value={search}
         onChange={e => handleSearch(e.target.value)}
