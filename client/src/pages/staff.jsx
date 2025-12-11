@@ -78,6 +78,10 @@ const styles = {
 export default function StaffDashboard() {
 
   // Authentication state
+  // LOGIN FORM FIELDS (IMPORTANT)
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+
   const [user, setUser] = useState(null);       // IMPORTANT FIX
   const [isStaff, setIsStaff] = useState(false);
   const [staffName, setStaffName] = useState("");
