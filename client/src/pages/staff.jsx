@@ -1,4 +1,5 @@
-// client/src/pages/StaffDashboard.jsx
+// src/pages/StaffDashboard.jsx
+
 import React, { useEffect, useState, useRef } from "react";
 import { auth, db, serverTimestamp } from "../firebaseInit";
 
@@ -6,7 +7,7 @@ import {
   signInWithEmailAndPassword,
   signOut,
   onAuthStateChanged,
-  getIdTokenResult
+  getIdTokenResult,
 } from "firebase/auth";
 
 import {
@@ -14,7 +15,6 @@ import {
   query,
   orderBy,
   limit,
-  getDocs,
   doc,
   runTransaction,
   setDoc,
@@ -22,303 +22,149 @@ import {
   deleteDoc,
   updateDoc,
   onSnapshot,
-  where
+  where,
+  getDocs,
 } from "firebase/firestore";
 
-/**
- * StaffDashboard.jsx
- * - Live tokens listener (tokens/session_* doc)
- * - Pending orders subscription (pending + session_id)
- * - Approve / Update / Delete orders
- * - Call Next / Call Again / Skip / Serve Skipped / Undo
- * - Auto-fallback manual fetch every 5s
- * - Responsive top panel (grid -> single column on narrow screens)
- *
- * Notes:
- * - tokens doc id uses pattern: "session_<session name>", e.g. "session_Session 2"
- * - tokens doc shape expected: { session_id, currentToken, lastTokenIssued, skipped: [], lastPrev, lastCalled, lastCalledAt }
- * - orders collection queries require a composite index: (status ==, session_id ==, orderBy createdAt)
- */
+// ----------------------------------------------
+// STYLE
+// ----------------------------------------------
+const styles = {
+  page: {
+    background: "#0b0b0b",
+    minHeight: "100vh",
+    padding: 20,
+    color: "#f6e8c1",
+    fontFamily: "'Segoe UI', sans-serif",
+  },
 
+  container: { maxWidth: 1100, margin: "auto" },
+
+  loginCard: {
+    maxWidth: 350,
+    margin: "120px auto",
+    padding: 25,
+    background: "#111",
+    borderRadius: 12,
+    borderLeft: "6px solid #ffd166",
+  },
+
+  loginInput: {
+    width: "100%",
+    padding: 12,
+    marginTop: 10,
+    borderRadius: 8,
+    border: "1px solid #333",
+    background: "#0c0c0c",
+    color: "#fff",
+  },
+
+  loginBtn: {
+    width: "100%",
+    padding: 14,
+    marginTop: 18,
+    borderRadius: 8,
+    border: "none",
+    fontWeight: 900,
+    background: "#ffd166",
+    color: "#111",
+    cursor: "pointer",
+  },
+
+  headerRow: {
+    display: "flex",
+    justifyContent: "space-between",
+    marginBottom: 20,
+    flexWrap: "wrap",
+  },
+
+  title: { fontSize: 26, fontWeight: 900, color: "#ffd166" },
+
+  topPanel: {
+    display: "flex",
+    gap: 20,
+    flexWrap: "wrap",
+    marginBottom: 20,
+  },
+
+  liveCard: {
+    flex: 1,
+    minWidth: 280,
+    background: "#111",
+    padding: 20,
+    borderRadius: 12,
+    borderLeft: "8px solid #ffd166",
+  },
+
+  sideCard: {
+    width: 300,
+    background: "#111",
+    padding: 20,
+    borderRadius: 12,
+  },
+
+  bigToken: {
+    fontSize: 60,
+    fontWeight: 900,
+    color: "#ffd166",
+    textAlign: "center",
+    marginTop: 10,
+  },
+
+  btn: {
+    padding: "12px 14px",
+    borderRadius: 8,
+    border: "none",
+    cursor: "pointer",
+    fontWeight: 900,
+  },
+
+  yellowBtn: { background: "#ffd166", color: "#111", flex: 1 },
+  grayBtn: { background: "#444", color: "#ffd166" },
+  orangeBtn: { background: "#ff7a00", color: "#111" },
+  purpleBtn: { background: "#6c5ce7", color: "#fff" },
+  greenBtn: { background: "#2ecc71", color: "#01100b" },
+
+  orderCard: {
+    background: "#111",
+    padding: 16,
+    borderLeft: "6px solid #333",
+    borderRadius: 10,
+    marginBottom: 12,
+  },
+};
+
+// ----------------------------------------------
+// MAIN COMPONENT
+// ----------------------------------------------
 export default function StaffDashboard() {
-  // Auth & staff
+  // LOGIN FIELDS
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isStaff, setIsStaff] = useState(false);
   const [staffName, setStaffName] = useState("");
 
-  // Sessions & tokens
+  // SESSION + TOKENS
   const [session, setSession] = useState("Session 1");
   const [sessions, setSessions] = useState([]);
   const [selectedSession, setSelectedSession] = useState("");
+
   const [current, setCurrent] = useState(0);
   const [lastIssued, setLastIssued] = useState(0);
-  const [skipped, setSkipped] = useState([]); // array of token numbers
+  const [skipped, setSkipped] = useState([]);
 
-  // Orders
+  // ORDERS
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(false);
 
-  // UI helpers
-  const [subscribing, setSubscribing] = useState(false);
-  const ordersUnsubRef = useRef(null);
-  const tokensUnsubRef = useRef(null);
-  const intervalRef = useRef(null);
-  const [actionBusy, setActionBusy] = useState(false);
-  const [lastAction, setLastAction] = useState(null); // used for short visual feedback
+  // Subscription references
+  const ordersUnsub = useRef(null);
+  const tokensUnsub = useRef(null);
 
-  // responsive
-  const [isNarrow, setIsNarrow] = useState(window.innerWidth < 880);
-  useEffect(() => {
-    function onResize() {
-      setIsNarrow(window.innerWidth < 880);
-    }
-    window.addEventListener("resize", onResize);
-    return () => window.removeEventListener("resize", onResize);
-  }, []);
-
-  // Styles (inline for single-file)
-  const styles = {
-    page: {
-      background: "#0b0b0b",
-      color: "#f6e8c1",
-      minHeight: "100vh",
-      padding: 20,
-      fontFamily: "'Segoe UI', Roboto, Arial, sans-serif"
-    },
-    container: { maxWidth: 1100, margin: "auto" },
-    headerRow: {
-      display: "flex",
-      justifyContent: "space-between",
-      gap: 12,
-      alignItems: "center",
-      marginBottom: 18
-    },
-    title: { fontSize: 22, fontWeight: 900, color: "#ffd166" },
-    subtitle: { color: "#bfb39a", fontSize: 13 },
-    topPanel: {
-      display: "grid",
-      gridTemplateColumns: isNarrow ? "1fr" : "1fr 320px",
-      gap: 16,
-      marginBottom: 18
-    },
-    liveCard: {
-      background: "#111",
-      padding: 18,
-      borderRadius: 12,
-      borderLeft: "8px solid #ffd166",
-      minHeight: 220,
-      display: "flex",
-      flexDirection: "column",
-      justifyContent: "space-between"
-    },
-    bigToken: {
-      fontSize: 60,
-      fontWeight: 900,
-      color: "#ffd166",
-      textAlign: "center",
-      letterSpacing: 2
-    },
-    smallMuted: { color: "#bfb39a", fontSize: 13 },
-    skippedChip: {
-      display: "inline-block",
-      background: "#222",
-      color: "#ffd166",
-      padding: "6px 10px",
-      borderRadius: 999,
-      marginRight: 8,
-      marginBottom: 8,
-      fontWeight: 700,
-      cursor: "pointer"
-    },
-    actionsRow: {
-      display: "flex",
-      gap: 12,
-      marginTop: 12,
-      flexWrap: "wrap"
-    },
-    btn: {
-      padding: "12px 14px",
-      borderRadius: 8,
-      border: "none",
-      cursor: "pointer",
-      fontWeight: 800
-    },
-    callBtn: { background: "#ffd166", color: "#111", flex: 1, minWidth: 160 },
-    callAgainBtn: { background: "#444", color: "#ffd166", minWidth: 120 },
-    skipBtn: { background: "#ff7a00", color: "#111", minWidth: 120 },
-    refreshBtn: { background: "#333", color: "#ffd166", minWidth: 120 },
-    approveSection: { marginTop: 16 },
-    orderCard: {
-      background: "#111",
-      padding: 14,
-      borderRadius: 10,
-      borderLeft: "6px solid #333",
-      marginBottom: 12
-    },
-    orderActions: { marginTop: 8, display: "flex", gap: 8 },
-    approveBtn: { background: "#2ecc71", color: "#01100b" },
-    updateBtn: { background: "#ffd166", color: "#111" },
-    deleteBtn: { background: "#ff6b6b", color: "#fff" },
-    sessionSelect: {
-      padding: 10,
-      fontSize: 15,
-      borderRadius: 8,
-      background: "#0c0c0c",
-      color: "#fff",
-      border: "1px solid #222"
-    },
-    smallNote: { color: "#bfb39a", fontSize: 13 }
-  };
-
-  // -----------------------------
-  // Load sessions (active + list)
-  // -----------------------------
-  useEffect(() => {
-    async function loadSessions() {
-      try {
-        const ref = doc(db, "settings", "activeSession");
-        const snap = await getDoc(ref);
-        const active = snap.exists() ? snap.data().session_id : "Session 1";
-        setSession(active);
-        setSelectedSession(active);
-        localStorage.setItem("session", active);
-
-        // load session docs under tokens collection
-        const tokensSnap = await getDocs(collection(db, "tokens"));
-        const sessionList = tokensSnap.docs
-          .map((d) => d.id.replace("session_", ""))
-          .sort((a, b) => {
-            const na = Number((a || "").split(" ")[1]) || 0;
-            const nb = Number((b || "").split(" ")[1]) || 0;
-            return na - nb;
-          });
-
-        setSessions(sessionList);
-      } catch (err) {
-        console.error("loadSessions error", err);
-      }
-    }
-
-    loadSessions();
-  }, []);
-
-  // -----------------------------
-  // Auth handling
-  // -----------------------------
-  useEffect(() => {
-    const unsub = onAuthStateChanged(auth, async (user) => {
-      if (!user) {
-        setIsStaff(false);
-        setOrders([]);
-        setStaffName("");
-        stopSubscriptions();
-        return;
-      }
-      try {
-        const tokenResult = await getIdTokenResult(user, true);
-        const role = tokenResult.claims?.role;
-        if (role === "staff") {
-          setIsStaff(true);
-          setStaffName(user.displayName || user.email || "staff");
-          startSubscriptions(selectedSession || session);
-        } else {
-          setIsStaff(false);
-          alert("This user is NOT staff.");
-          stopSubscriptions();
-        }
-      } catch (err) {
-        console.error("auth token error", err);
-        setIsStaff(false);
-        stopSubscriptions();
-      }
-    });
-
-    return () => unsub();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  // -----------------------------
-  // Start/Stop subscriptions
-  // -----------------------------
-  function startSubscriptions(sess) {
-    if (subscribing) return;
-    setSubscribing(true);
-    setLoading(true);
-
-    const tokenRef = doc(db, "tokens", "session_" + sess);
-    tokensUnsubRef.current = onSnapshot(
-      tokenRef,
-      (snap) => {
-        if (!snap.exists()) {
-          setCurrent(0);
-          setLastIssued(0);
-          setSkipped([]);
-          setLoading(false);
-          return;
-        }
-        const data = snap.data();
-        setCurrent(data.currentToken || 0);
-        setLastIssued(data.lastTokenIssued || 0);
-        setSkipped(Array.isArray(data.skipped) ? data.skipped.slice() : []);
-        setLoading(false);
-      },
-      (err) => {
-        console.error("tokens onSnapshot error", err);
-      }
-    );
-
-    // pending orders for session
-    const ordersQ = query(
-      collection(db, "orders"),
-      where("status", "==", "pending"),
-      where("session_id", "==", sess),
-      orderBy("createdAt", "asc")
-    );
-
-    ordersUnsubRef.current = onSnapshot(
-      ordersQ,
-      (snap) => {
-        const arr = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-        setOrders(arr);
-        setLoading(false);
-      },
-      (err) => {
-        console.error("orders onSnapshot error", err);
-      }
-    );
-
-    // fallback manual fetch every 5s
-    intervalRef.current = setInterval(() => {
-      fetchOrdersManual(sess);
-    }, 5000);
-  }
-
-  function stopSubscriptions() {
-    if (tokensUnsubRef.current) tokensUnsubRef.current();
-    if (ordersUnsubRef.current) ordersUnsubRef.current();
-    if (intervalRef.current) clearInterval(intervalRef.current);
-    setSubscribing(false);
-  }
-
-  // restart subs when selectedSession changed
-  useEffect(() => {
-    if (!isStaff) return;
-    stopSubscriptions();
-    startSubscriptions(selectedSession || session);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedSession, isStaff, session]);
-
-  useEffect(() => {
-    return () => {
-      stopSubscriptions();
-    };
-  }, []);
-
-  // -----------------------------
-  // Manual auth functions (login UI not required)
-  // -----------------------------
-  async function login(e) {
+  // ----------------------------------------------
+  // LOGIN
+  // ----------------------------------------------
+  async function handleLogin(e) {
     e.preventDefault();
     try {
       await signInWithEmailAndPassword(auth, email.trim(), password.trim());
@@ -327,580 +173,401 @@ export default function StaffDashboard() {
     }
   }
 
-  async function logout() {
+  async function handleLogout() {
     try {
       await signOut(auth);
-      stopSubscriptions();
       setIsStaff(false);
     } catch (err) {
-      console.error("logout error", err);
+      alert("Logout failed");
     }
   }
 
-  // -----------------------------
-  // Manual orders fetch (fallback)
-  // -----------------------------
-  async function fetchOrdersManual(sess) {
-    if (!sess) return;
-    try {
-      setLoading(true);
-      const q = query(
-        collection(db, "orders"),
-        where("status", "==", "pending"),
-        where("session_id", "==", sess),
-        orderBy("createdAt", "asc")
-      );
-      const snap = await getDocs(q);
+  // ----------------------------------------------
+  // AUTH WATCHER
+  // ----------------------------------------------
+  useEffect(() => {
+    return onAuthStateChanged(auth, async (user) => {
+      if (!user) {
+        setIsStaff(false);
+        return;
+      }
+
+      const token = await getIdTokenResult(user, true);
+      if (token.claims.role === "staff") {
+        setIsStaff(true);
+        setStaffName(user.email);
+      } else {
+        alert("Not a staff account");
+        await signOut(auth);
+      }
+    });
+  }, []);
+
+  // ----------------------------------------------
+  // LOAD SESSIONS
+  // ----------------------------------------------
+  async function loadSessions() {
+    const s = await getDocs(collection(db, "tokens"));
+    const list = s.docs.map((d) => d.id.replace("session_", ""));
+    setSessions(list);
+
+    const activeSnap = await getDoc(doc(db, "settings", "activeSession"));
+    const active = activeSnap.exists()
+      ? activeSnap.data().session_id
+      : "Session 1";
+
+    setSession(active);
+    setSelectedSession(active);
+  }
+
+  // ----------------------------------------------
+  // SUBSCRIBE TO TOKENS + ORDERS
+  // ----------------------------------------------
+  function subscribe(sessionId) {
+    const tokenRef = doc(db, "tokens", "session_" + sessionId);
+
+    tokensUnsub.current = onSnapshot(tokenRef, (snap) => {
+      if (!snap.exists()) return;
+      const d = snap.data();
+      setCurrent(d.currentToken || 0);
+      setLastIssued(d.lastTokenIssued || 0);
+      setSkipped(d.skipped || []);
+    });
+
+    const q = query(
+      collection(db, "orders"),
+      where("status", "==", "pending"),
+      where("session_id", "==", sessionId),
+      orderBy("createdAt", "asc")
+    );
+
+    ordersUnsub.current = onSnapshot(q, (snap) => {
       const arr = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
       setOrders(arr);
-      setLoading(false);
-    } catch (err) {
-      console.error("fetchOrdersManual error", err);
-      setLoading(false);
-    }
+    });
   }
 
-  // -----------------------------
-  // Start new session
-  // -----------------------------
-  async function startNewSession() {
+  useEffect(() => {
+    if (!isStaff) return;
+    loadSessions();
+  }, [isStaff]);
+
+  useEffect(() => {
+    if (!selectedSession) return;
+    if (ordersUnsub.current) ordersUnsub.current();
+    if (tokensUnsub.current) tokensUnsub.current();
+    subscribe(selectedSession);
+  }, [selectedSession]);
+
+  // ----------------------------------------------
+  // CALL NEXT
+  // ----------------------------------------------
+  async function callNext() {
+    const tokenRef = doc(db, "tokens", "session_" + selectedSession);
     try {
-      let newNum = 1;
-      if (session && session.includes(" ")) {
-        const n = Number(session.split(" ")[1]);
-        if (!isNaN(n)) newNum = n + 1;
-      }
-      const newSession = `Session ${newNum}`;
-
-      await setDoc(doc(db, "settings", "activeSession"), {
-        session_id: newSession
-      });
-
-      await setDoc(
-        doc(db, "tokens", "session_" + newSession),
-        { session_id: newSession, currentToken: 0, lastTokenIssued: 0, skipped: [] },
-        { merge: true }
-      );
-
-      setSession(newSession);
-      setSelectedSession(newSession);
-      localStorage.setItem("session", newSession);
-
-      const tokensSnap = await getDocs(collection(db, "tokens"));
-      const sessionList = tokensSnap.docs.map((d) => d.id.replace("session_", ""));
-      setSessions(sessionList);
-      alert("New session started: " + newSession);
-    } catch (err) {
-      console.error("startNewSession error", err);
-      alert("Failed to start new session");
-    }
-  }
-
-  // -----------------------------
-  // Approve order (assign token)
-  // -----------------------------
-  async function approveOrder(orderId) {
-    try {
-      const orderRef = doc(db, "orders", orderId);
-
       await runTransaction(db, async (tx) => {
-        const orderSnap = await tx.get(orderRef);
-        if (!orderSnap.exists()) throw new Error("Order missing");
+        const snap = await tx.get(tokenRef);
+        const d = snap.data();
+        const cur = d.currentToken || 0;
+        const last = d.lastTokenIssued || 0;
+        const skippedArr = d.skipped || [];
 
-        const order = orderSnap.data();
-        if (order.status !== "pending") throw new Error("Already approved");
+        if (skippedArr.length > 0) {
+          const next = Math.min(...skippedArr);
+          tx.update(tokenRef, {
+            currentToken: next,
+            skipped: skippedArr.filter((t) => t !== next),
+            lastCalled: next,
+            lastCalledAt: serverTimestamp(),
+          });
+        } else {
+          const next = cur + 1;
+          if (next > last) throw new Error("No next token available");
+          tx.update(tokenRef, {
+            currentToken: next,
+            lastCalled: next,
+            lastCalledAt: serverTimestamp(),
+          });
+        }
+      });
+    } catch (err) {
+      alert(err.message);
+    }
+  }
 
-        const tokenRef = doc(db, "tokens", "session_" + (selectedSession || session));
+  // ----------------------------------------------
+  // CALL AGAIN
+  // ----------------------------------------------
+  async function callAgain() {
+    const tokenRef = doc(db, "tokens", "session_" + selectedSession);
+    try {
+      await updateDoc(tokenRef, {
+        lastCalled: current,
+        lastCalledAt: serverTimestamp(),
+      });
+    } catch (err) {
+      alert("Failed");
+    }
+  }
+
+  // ----------------------------------------------
+  // SKIP TOKEN
+  // ----------------------------------------------
+  async function skipCurrent() {
+    const tok = current;
+    if (!tok) return;
+
+    const tokenRef = doc(db, "tokens", "session_" + selectedSession);
+    try {
+      await updateDoc(tokenRef, {
+        skipped: [...skipped, tok].sort((a, b) => a - b),
+      });
+      callNext();
+    } catch (err) {
+      alert("Skip failed");
+    }
+  }
+
+  // ----------------------------------------------
+  // SERVE SKIPPED
+  // ----------------------------------------------
+  async function serveSkipped(tok) {
+    const tokenRef = doc(db, "tokens", "session_" + selectedSession);
+
+    await updateDoc(tokenRef, {
+      currentToken: tok,
+      skipped: skipped.filter((t) => t !== tok),
+      lastCalled: tok,
+      lastCalledAt: serverTimestamp(),
+    });
+  }
+
+  // ----------------------------------------------
+  // APPROVE ORDER
+  // ----------------------------------------------
+  async function approveOrder(id) {
+    const tokenRef = doc(db, "tokens", "session_" + selectedSession);
+    const orderRef = doc(db, "orders", id);
+
+    try {
+      await runTransaction(db, async (tx) => {
         const tokenSnap = await tx.get(tokenRef);
+        const d = tokenSnap.data();
+        const next = (d.lastTokenIssued || 0) + 1;
 
-        let last = tokenSnap.exists() ? tokenSnap.data().lastTokenIssued || 0 : 0;
-        const next = last + 1;
-
-        tx.set(
-          tokenRef,
-          {
-            session_id: selectedSession || session,
-            currentToken: tokenSnap.exists() ? tokenSnap.data().currentToken : 0,
-            lastTokenIssued: next,
-            skipped: tokenSnap.exists() ? tokenSnap.data().skipped || [] : []
-          },
-          { merge: true }
-        );
+        tx.update(tokenRef, { lastTokenIssued: next });
 
         tx.update(orderRef, {
           token: next,
           status: "approved",
           approvedAt: serverTimestamp(),
-          session_id: selectedSession || session
+          session_id: selectedSession,
         });
       });
     } catch (err) {
-      alert("Approve failed: " + err.message);
-      console.error(err);
+      alert(err.message);
     }
   }
 
-  // -----------------------------
-  // Call Next
-  // -----------------------------
-  async function callNext() {
-    if (actionBusy) return;
-    setActionBusy(true);
-
-    const tokenRef = doc(db, "tokens", "session_" + (selectedSession || session));
-    try {
-      await runTransaction(db, async (tx) => {
-        const snap = await tx.get(tokenRef);
-        let cur = 0;
-        let last = 0;
-        let skippedArr = [];
-
-        if (snap.exists()) {
-          const data = snap.data();
-          cur = data.currentToken || 0;
-          last = data.lastTokenIssued || 0;
-          skippedArr = Array.isArray(data.skipped) ? data.skipped.slice() : [];
-        }
-
-        const lastPrev = cur;
-
-        if (skippedArr.length > 0) {
-          const nextSkipped = Math.min(...skippedArr);
-          const newSkipped = skippedArr.filter((t) => t !== nextSkipped);
-          tx.update(tokenRef, {
-            currentToken: nextSkipped,
-            skipped: newSkipped,
-            lastCalled: nextSkipped,
-            lastCalledAt: serverTimestamp(),
-            lastPrev
-          });
-          setLastAction({ type: "callNext", value: nextSkipped });
-        } else {
-          const candidate = cur + 1;
-          if (candidate <= last) {
-            tx.update(tokenRef, {
-              currentToken: candidate,
-              lastCalled: candidate,
-              lastCalledAt: serverTimestamp(),
-              lastPrev
-            });
-            setLastAction({ type: "callNext", value: candidate });
-          } else {
-            throw new Error("No next token available");
-          }
-        }
-      });
-
-      setTimeout(() => setLastAction(null), 800);
-    } catch (err) {
-      alert("Call Next failed: " + (err.message || err));
-      console.error(err);
-    } finally {
-      setActionBusy(false);
-    }
-  }
-
-  // -----------------------------
-  // Call Again
-  // -----------------------------
-  async function callAgain() {
-    if (actionBusy) return;
-    setActionBusy(true);
-    const tokenRef = doc(db, "tokens", "session_" + (selectedSession || session));
-    try {
-      await runTransaction(db, async (tx) => {
-        const snap = await tx.get(tokenRef);
-        if (!snap.exists()) throw new Error("No token doc");
-        const cur = snap.data().currentToken || 0;
-        if (!cur || cur === 0) throw new Error("No current token to call");
-        tx.update(tokenRef, { lastCalled: cur, lastCalledAt: serverTimestamp() });
-      });
-      setLastAction({ type: "callAgain" });
-      setTimeout(() => setLastAction(null), 700);
-    } catch (err) {
-      alert("Call Again failed: " + (err.message || err));
-      console.error(err);
-    } finally {
-      setActionBusy(false);
-    }
-  }
-
-  // -----------------------------
-  // Skip token
-  // -----------------------------
-  async function skipToken(tokenToSkip) {
-    if (!tokenToSkip) return;
-    const confirmSkip = window.confirm(`Mark token ${tokenToSkip} as NOT PRESENT (skip)?`);
-    if (!confirmSkip) return;
-
-    const tokenRef = doc(db, "tokens", "session_" + (selectedSession || session));
-    try {
-      await runTransaction(db, async (tx) => {
-        const snap = await tx.get(tokenRef);
-        let cur = 0;
-        let skippedArr = [];
-        let last = 0;
-        if (snap.exists()) {
-          cur = snap.data().currentToken || 0;
-          skippedArr = Array.isArray(snap.data().skipped) ? snap.data().skipped.slice() : [];
-          last = snap.data().lastTokenIssued || 0;
-        }
-
-        if (!skippedArr.includes(tokenToSkip)) skippedArr.push(tokenToSkip);
-        skippedArr = skippedArr.sort((a, b) => a - b);
-
-        tx.set(tokenRef, { skipped: skippedArr }, { merge: true });
-
-        if (tokenToSkip === cur) {
-          const remaining = skippedArr.filter((t) => t !== cur);
-          if (remaining.length > 0) {
-            const candidate = Math.min(...remaining);
-            const newSkipped = skippedArr.filter((t) => t !== candidate && t !== cur);
-            tx.update(tokenRef, {
-              currentToken: candidate,
-              skipped: newSkipped,
-              lastCalled: candidate,
-              lastCalledAt: serverTimestamp(),
-              lastPrev: cur
-            });
-          } else {
-            const candidate = cur + 1;
-            if (candidate <= last) {
-              tx.update(tokenRef, {
-                currentToken: candidate,
-                lastCalled: candidate,
-                lastCalledAt: serverTimestamp(),
-                lastPrev: cur
-              });
-            } else {
-              tx.update(tokenRef, { lastCalled: cur, lastCalledAt: serverTimestamp(), lastPrev: cur });
-            }
-          }
-        }
-      });
-      setLastAction({ type: "skip", value: tokenToSkip });
-      setTimeout(() => setLastAction(null), 700);
-    } catch (err) {
-      alert("Skip failed: " + (err.message || err));
-      console.error(err);
-    }
-  }
-
-  // -----------------------------
-  // Serve skipped token now
-  // -----------------------------
-  async function serveSkipped(tokenNumber) {
-    if (!tokenNumber) return;
-    const ok = window.confirm(`Serve skipped token ${tokenNumber} now?`);
-    if (!ok) return;
-
-    const tokenRef = doc(db, "tokens", "session_" + (selectedSession || session));
-    try {
-      await runTransaction(db, async (tx) => {
-        const snap = await tx.get(tokenRef);
-        if (!snap.exists()) throw new Error("No token doc");
-        const arr = Array.isArray(snap.data().skipped) ? snap.data().skipped.slice() : [];
-        const newArr = arr.filter((t) => t !== tokenNumber);
-        tx.update(tokenRef, {
-          currentToken: tokenNumber,
-          skipped: newArr,
-          lastCalled: tokenNumber,
-          lastCalledAt: serverTimestamp(),
-          lastPrev: snap.data().currentToken || 0
-        });
-      });
-      setLastAction({ type: "serveSkipped", value: tokenNumber });
-      setTimeout(() => setLastAction(null), 700);
-    } catch (err) {
-      alert("Serve skipped failed: " + (err.message || err));
-      console.error(err);
-    }
-  }
-
-  // -----------------------------
-  // Undo (restore lastPrev)
-  // -----------------------------
-  async function undoLast() {
-    if (actionBusy) return;
-    setActionBusy(true);
-
-    const tokenRef = doc(db, "tokens", "session_" + (selectedSession || session));
-    try {
-      await runTransaction(db, async (tx) => {
-        const snap = await tx.get(tokenRef);
-        if (!snap.exists()) throw new Error("No token doc");
-        const data = snap.data();
-        const lastPrev = data.lastPrev;
-        if (lastPrev === undefined || lastPrev === null) throw new Error("No previous token to restore");
-
-        tx.update(tokenRef, {
-          currentToken: lastPrev,
-          lastCalled: lastPrev,
-          lastCalledAt: serverTimestamp(),
-          lastPrev: null
-        });
-      });
-      setLastAction({ type: "undo" });
-      setTimeout(() => setLastAction(null), 700);
-    } catch (err) {
-      alert("Undo failed: " + (err.message || err));
-      console.error(err);
-    } finally {
-      setActionBusy(false);
-    }
-  }
-
-  // -----------------------------
-  // Update / Delete order
-  // -----------------------------
-  async function updateOrder(order) {
-    const newName = prompt("Update name:", order.customerName);
-    if (newName === null) return;
-
-    const newPhone = prompt("Update phone:", order.phone);
-    if (newPhone === null) return;
-
-    const newItems = prompt(
-      "Update Items (qty×name, ...):",
-      (order.items || []).map((i) => `${i.quantity}×${i.name}`).join(", ")
-    );
-    if (newItems === null) return;
-
-    const parsedItems = newItems.split(",").map((str) => {
-      const [qty, name] = str.split("×");
-      return { quantity: Number(qty.trim()), name: name.trim() };
-    });
-
-    try {
-      await updateDoc(doc(db, "orders", order.id), {
-        customerName: newName.trim(),
-        phone: newPhone.trim(),
-        items: parsedItems
-      });
-      alert("Order updated!");
-    } catch (err) {
-      console.error("updateOrder err", err);
-      alert("Update failed");
-    }
-  }
-
+  // ----------------------------------------------
+  // DELETE ORDER
+  // ----------------------------------------------
   async function deleteOrder(orderId) {
     if (!window.confirm("Delete this order?")) return;
-    try {
-      await deleteDoc(doc(db, "orders", orderId));
-    } catch (err) {
-      console.error("deleteOrder err", err);
-      alert("Delete failed");
-    }
+    await deleteDoc(doc(db, "orders", orderId));
   }
 
-  // -----------------------------
-  // helper: format items
-  // -----------------------------
-  function formatItems(items = []) {
-    return items.map((i) => `${i.quantity}×${i.name}`).join(", ");
+  // ----------------------------------------------
+  // UI
+  // ----------------------------------------------
+
+  // ----------------------------------------------
+  // LOGIN SCREEN
+  // ----------------------------------------------
+  if (!isStaff) {
+    return (
+      <div style={styles.page}>
+        <div style={styles.loginCard}>
+          <h2>Staff Login</h2>
+
+          <input
+            style={styles.loginInput}
+            placeholder="Email"
+            onChange={(e) => setEmail(e.target.value)}
+          />
+
+          <input
+            style={styles.loginInput}
+            placeholder="Password"
+            type="password"
+            onChange={(e) => setPassword(e.target.value)}
+          />
+
+          <button style={styles.loginBtn} onClick={handleLogin}>
+            Login
+          </button>
+        </div>
+      </div>
+    );
   }
 
-  // -----------------------------
-  // UI rendering
-  // -----------------------------
+  // ----------------------------------------------
+  // DASHBOARD SCREEN
+  // ----------------------------------------------
   return (
     <div style={styles.page}>
       <div style={styles.container}>
+        {/* HEADER */}
         <div style={styles.headerRow}>
+          <div style={styles.title}>Waffle Lounge — Staff Dashboard</div>
           <div>
-            <div style={styles.title}>Waffle Lounge — Staff Dashboard</div>
-            <div style={styles.subtitle}>Manage tokens, approve orders and serve customers</div>
-          </div>
-
-          <div style={{ textAlign: "right" }}>
-            <div style={styles.smallMuted}>Signed in as</div>
-            <div style={{ fontWeight: 800 }}>{isStaff ? staffName : "Not signed in"}</div>
+            <div>Signed in as</div>
+            <b>{staffName}</b>
           </div>
         </div>
 
+        {/* TOP PANEL */}
         <div style={styles.topPanel}>
+          {/* LIVE CARD */}
           <div style={styles.liveCard}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <div>
-                <div style={{ color: "#bfb39a" }}>Now Serving</div>
-                <div style={styles.bigToken}>{current || "-"}</div>
-              </div>
+            <div>Now Serving</div>
+            <div style={styles.bigToken}>{current || "-"}</div>
 
-              <div style={{ textAlign: "right" }}>
-                <div style={styles.smallMuted}>Last Issued</div>
-                <div style={{ fontWeight: 900, fontSize: 20, color: "#ffd166" }}>{lastIssued || 0}</div>
+            <div style={{ marginTop: 10 }}>
+              <div>Last Issued: {lastIssued}</div>
+            </div>
 
-                <div style={{ marginTop: 8 }}>
-                  <div style={styles.smallMuted}>Session</div>
-                  <select
-                    style={styles.sessionSelect}
-                    value={selectedSession}
-                    onChange={(e) => {
-                      setSelectedSession(e.target.value);
-                      fetchOrdersManual(e.target.value);
+            <div style={{ marginTop: 10 }}>
+              <div>Skipped Tokens:</div>
+              {skipped.length === 0 ? (
+                <div style={{ color: "#666" }}>— none —</div>
+              ) : (
+                skipped.map((t) => (
+                  <span
+                    key={t}
+                    onClick={() => serveSkipped(t)}
+                    style={{
+                      background: "#222",
+                      padding: "6px 12px",
+                      borderRadius: 20,
+                      marginRight: 8,
+                      cursor: "pointer",
+                      color: "#ffd166",
                     }}
                   >
-                    {sessions.map((s) => (
-                      <option key={s} value={s}>
-                        {s}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
+                    {t}
+                  </span>
+                ))
+              )}
             </div>
 
-            <div style={{ marginTop: 12 }}>
-              <div style={styles.smallMuted}>Skipped Tokens</div>
-              <div style={{ marginTop: 8 }}>
-                {skipped && skipped.length ? (
-                  skipped.map((t) => (
-                    <span key={t} style={styles.skippedChip} onClick={() => serveSkipped(t)}>
-                      {t}
-                    </span>
-                  ))
-                ) : (
-                  <div style={{ color: "#6b6b6b", marginTop: 8 }}>— none —</div>
-                )}
-              </div>
-            </div>
-
-            <div style={styles.actionsRow}>
+            <div style={{ display: "flex", gap: 10, marginTop: 15 }}>
               <button
-                style={{
-                  ...styles.btn,
-                  ...styles.callBtn,
-                  opacity: actionBusy ? 0.6 : 1,
-                  boxShadow: lastAction && lastAction.type === "callNext" ? "0 0 0 6px rgba(255,209,102,0.12)" : "none"
-                }}
+                style={{ ...styles.btn, ...styles.yellowBtn }}
                 onClick={callNext}
-                disabled={actionBusy}
               >
                 Call Next
               </button>
 
-              <button style={{ ...styles.btn, ...styles.callAgainBtn }} onClick={callAgain} disabled={actionBusy}>
+              <button
+                style={{ ...styles.btn, ...styles.grayBtn }}
+                onClick={callAgain}
+              >
                 Call Again
               </button>
 
               <button
-                style={{ ...styles.btn, ...styles.skipBtn }}
-                onClick={() => {
-                  const tok = Number(prompt("Token to mark as not present (skip):", String(current || "")));
-                  if (!tok) return;
-                  skipToken(tok);
-                }}
-                disabled={actionBusy}
+                style={{ ...styles.btn, ...styles.orangeBtn }}
+                onClick={skipCurrent}
               >
-                Skip Token
+                Skip
               </button>
             </div>
 
-            <div style={{ marginTop: 8 }}>
+            <div style={{ display: "flex", gap: 10, marginTop: 15 }}>
               <button
-                onClick={() => {
-                  fetchOrdersManual(selectedSession || session);
-                }}
-                style={{ ...styles.btn, ...styles.refreshBtn }}
+                style={{ ...styles.btn, ...styles.purpleBtn }}
+                onClick={() => (window.location.href = "/approved")}
               >
-                Refresh Orders
-              </button>
-
-              <button onClick={() => (window.location.href = "/approved")} style={{ ...styles.btn, marginLeft: 8, background: "#6c5ce7", color: "#fff" }}>
                 View Approved
               </button>
 
-              <button onClick={logout} style={{ ...styles.btn, marginLeft: 8, background: "#333", color: "#ffd166" }}>
+              <button
+                style={{ ...styles.btn, background: "#333", color: "#ffd166" }}
+                onClick={handleLogout}
+              >
                 Logout
               </button>
-
-              <button onClick={undoLast} style={{ ...styles.btn, marginLeft: 8, background: "#222", color: "#ffd166" }} title="Go back to previous token (undo)">
-                Undo
-              </button>
             </div>
-
-            <div style={{ marginTop: 10, ...styles.smallNote }}>Auto-refresh (live) enabled. Manual refresh available.</div>
           </div>
 
-          <div style={{ background: "#111", padding: 16, borderRadius: 12 }}>
-            <div style={{ fontWeight: 800, marginBottom: 8 }}>Session Controls</div>
+          {/* SESSION CARD */}
+          <div style={styles.sideCard}>
+            <h3>Session Controls</h3>
 
             <div style={{ marginBottom: 10 }}>
-              <button onClick={startNewSession} style={{ ...styles.btn, background: "#ffd166", color: "#111", width: "100%" }}>
-                Start New Session
-              </button>
+              <div>Active Session</div>
+              <b>{session}</b>
             </div>
 
-            <div style={{ marginTop: 10 }}>
-              <label style={{ color: "#bfb39a" }}>Active session</label>
-              <div style={{ fontWeight: 800, marginTop: 6 }}>{session}</div>
-            </div>
-
-            <div style={{ marginTop: 14 }}>
-              <div style={{ color: "#bfb39a", marginBottom: 6 }}>Quick actions</div>
-              <div style={{ display: "flex", gap: 8 }}>
-                <button
-                  style={{ ...styles.btn, background: "#2ecc71", color: "#01100b", flex: 1 }}
-                  onClick={() => {
-                    const t = Number(prompt("Serve skipped token (enter token):", skipped[0] || ""));
-                    if (!t) return;
-                    serveSkipped(t);
-                  }}
-                >
-                  Serve Skipped
-                </button>
-
-                <button style={{ ...styles.btn, background: "#444", color: "#ffd166", flex: 1 }} onClick={() => (window.location.href = "/approved")}>
-                  Approved Orders
-                </button>
-              </div>
+            <div>
+              Change Session:
+              <select
+                value={selectedSession}
+                onChange={(e) => setSelectedSession(e.target.value)}
+                style={{
+                  width: "100%",
+                  marginTop: 10,
+                  padding: 10,
+                  borderRadius: 8,
+                  background: "#0c0c0c",
+                  color: "#fff",
+                  border: "1px solid #333",
+                }}
+              >
+                {sessions.map((s) => (
+                  <option key={s} value={s}>
+                    {s}
+                  </option>
+                ))}
+              </select>
             </div>
           </div>
         </div>
 
-        <div style={styles.approveSection}>
-          <h3>Pending Orders (Session: {selectedSession || session})</h3>
-          {loading && <div>Loading…</div>}
+        {/* PENDING ORDERS */}
+        <h3>Pending Orders (Session: {selectedSession})</h3>
 
-          {!loading && orders.length === 0 && <div style={{ color: "#6b6b6b" }}>No pending orders</div>}
+        {loading && <div>Loading...</div>}
+        {!loading && orders.length === 0 && (
+          <div style={{ color: "#666" }}>No pending orders</div>
+        )}
 
-          {!loading &&
-            orders.map((order) => (
-              <div key={order.id} style={styles.orderCard}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-                  <div>
-                    <div style={{ fontWeight: 900 }}>{order.customerName || "Unknown"}</div>
-                    <div style={{ color: "#bfb39a", marginTop: 6 }}>{order.phone}</div>
-                    <div style={{ marginTop: 8, color: "#ddd" }}>{formatItems(order.items || [])}</div>
-                    <div style={{ marginTop: 6, color: "#999", fontSize: 13 }}>
-                      Placed: {order.createdAt ? new Date(order.createdAt.toDate()).toLocaleString() : "—"}
-                    </div>
-                  </div>
+        {orders.map((order) => (
+          <div key={order.id} style={styles.orderCard}>
+            <div>
+              <b>{order.customerName}</b>
+              <div style={{ color: "#aaa" }}>{order.phone}</div>
+              <div>{order.items?.map((i) => `${i.quantity}×${i.name}`).join(", ")}</div>
+            </div>
 
-                  <div style={{ textAlign: "right" }}>
-                    <div style={{ color: "#bfb39a", marginBottom: 6 }}>Status:</div>
-                    <div style={{ fontWeight: 800, color: "#ffd166" }}>{order.status}</div>
-                    <div style={{ marginTop: 12 }}>{order.token ? <div>Token: <span style={{ fontWeight: 900 }}>{order.token}</span></div> : null}</div>
-                  </div>
-                </div>
+            <div style={{ display: "flex", gap: 10, marginTop: 12 }}>
+              <button
+                style={{ ...styles.btn, ...styles.greenBtn }}
+                onClick={() => approveOrder(order.id)}
+              >
+                Approve
+              </button>
 
-                <div style={styles.orderActions}>
-                  <button onClick={() => approveOrder(order.id)} style={{ ...styles.btn, ...styles.approveBtn }}>
-                    Approve
-                  </button>
-
-                  <button onClick={() => updateOrder(order)} style={{ ...styles.btn, ...styles.updateBtn }}>
-                    Update
-                  </button>
-
-                  <button onClick={() => deleteOrder(order.id)} style={{ ...styles.btn, ...styles.deleteBtn }}>
-                    Delete
-                  </button>
-                </div>
-              </div>
-            ))}
-        </div>
+              <button
+                style={{ ...styles.btn, background: "#ff4d4d", color: "#fff" }}
+                onClick={() => deleteOrder(order.id)}
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        ))}
       </div>
     </div>
   );
