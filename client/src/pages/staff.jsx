@@ -1,5 +1,4 @@
 // client/src/pages/StaffDashboard.jsx
-
 import React, { useEffect, useState, useRef } from "react";
 import { auth, db, serverTimestamp } from "../firebaseInit";
 
@@ -42,9 +41,9 @@ const styles = {
     alignItems: "center",
     marginBottom: 18
   },
-  titleBlock: {},
   title: { fontSize: 22, fontWeight: 900, color: "#ffd166" },
   subtitle: { color: "#bfb39a", fontSize: 13 },
+
   topPanel: {
     display: "grid",
     gridTemplateColumns: "1fr 320px",
@@ -61,11 +60,11 @@ const styles = {
     fontSize: 60,
     fontWeight: 900,
     color: "#ffd166",
-    textAlign: "center",
     letterSpacing: 2
   },
   smallMuted: { color: "#bfb39a", fontSize: 13 },
   infoRow: { display: "flex", justifyContent: "space-between", marginTop: 8 },
+
   skippedChip: {
     display: "inline-block",
     background: "#222",
@@ -76,6 +75,7 @@ const styles = {
     marginBottom: 8,
     fontWeight: 700
   },
+
   actionsRow: {
     display: "flex",
     gap: 12,
@@ -108,9 +108,21 @@ const styles = {
   updateBtn: { background: "#ffd166", color: "#111" },
   deleteBtn: { background: "#ff6b6b", color: "#fff" },
 
-  sessionSelect: { padding: 10, fontSize: 15, borderRadius: 8, background: "#0c0c0c", color: "#fff", border: "1px solid #222" },
+  sessionSelect: {
+    padding: 10,
+    fontSize: 15,
+    borderRadius: 8,
+    background: "#0c0c0c",
+    color: "#fff",
+    border: "1px solid #222"
+  },
 
-  smallNote: { color: "#bfb39a", fontSize: 13 }
+  smallNote: { color: "#bfb39a", fontSize: 13 },
+
+  // simple flash styles (inline style toggles)
+  flashGreen: { boxShadow: "0 0 0 4px rgba(46,204,113,0.12)" },
+  flashGold: { boxShadow: "0 0 0 4px rgba(255,209,102,0.12)" },
+  flashOrange: { boxShadow: "0 0 0 4px rgba(255,122,0,0.12)" }
 };
 
 export default function StaffDashboard() {
@@ -129,7 +141,7 @@ export default function StaffDashboard() {
   const [skipped, setSkipped] = useState([]); // array of token numbers
 
   // orders
-  const [orders, setOrders] = useState([]);
+  const [orders, setOrders] = useState([]); // pending orders
   const [loading, setLoading] = useState(false);
 
   // UI helpers
@@ -137,6 +149,16 @@ export default function StaffDashboard() {
   const ordersUnsubRef = useRef(null);
   const tokensUnsubRef = useRef(null);
   const intervalRef = useRef(null);
+
+  // visual flash states
+  const [flashCallNext, setFlashCallNext] = useState(false);
+  const [flashCallAgain, setFlashCallAgain] = useState(false);
+  const [flashSkip, setFlashSkip] = useState(false);
+  const [flashViewApproved, setFlashViewApproved] = useState(false);
+
+  // last action info (read from tokens doc)
+  const [lastCalled, setLastCalled] = useState(null);
+  const [lastPrev, setLastPrev] = useState(null);
 
   // -----------------------------
   // Load sessions (active + list)
@@ -156,7 +178,6 @@ export default function StaffDashboard() {
         const sessionList = tokensSnap.docs
           .map((d) => d.id.replace("session_", ""))
           .sort((a, b) => {
-            // keep natural sort if names like "Session 1"
             const na = Number(a.split(" ")[1]) || 0;
             const nb = Number(b.split(" ")[1]) || 0;
             return na - nb;
@@ -180,6 +201,7 @@ export default function StaffDashboard() {
         setIsStaff(false);
         setOrders([]);
         setStaffName("");
+        stopSubscriptions();
         return;
       }
       try {
@@ -217,12 +239,16 @@ export default function StaffDashboard() {
         setCurrent(0);
         setLastIssued(0);
         setSkipped([]);
+        setLastCalled(null);
+        setLastPrev(null);
         return;
       }
       const data = snap.data();
       setCurrent(data.currentToken || 0);
       setLastIssued(data.lastTokenIssued || 0);
       setSkipped(Array.isArray(data.skipped) ? data.skipped.slice() : []);
+      setLastCalled(data.lastCalled || null);
+      setLastPrev(data.lastPrev || null);
     });
 
     // orders listener for pending orders in selectedSession
@@ -245,7 +271,7 @@ export default function StaffDashboard() {
       }
     );
 
-    // auto refresh fallback every 5 seconds (as requested)
+    // additional auto-refresh fallback every 5 seconds (safe — listeners are primary)
     intervalRef.current = setInterval(() => {
       fetchOrdersManual(sess);
     }, 5000);
@@ -336,10 +362,10 @@ export default function StaffDashboard() {
         session_id: newSession
       });
 
-      // initialize tokens doc
+      // initialize tokens doc (with skipped array)
       await setDoc(
         doc(db, "tokens", "session_" + newSession),
-        { session_id: newSession, currentToken: 0, lastTokenIssued: 0, skipped: [] },
+        { session_id: newSession, currentToken: 0, lastTokenIssued: 0, skipped: [], lastCalled: 0, lastPrev: 0 },
         { merge: true }
       );
 
@@ -403,14 +429,20 @@ export default function StaffDashboard() {
 
   // -----------------------------
   // Call Next (serving logic)
+  // - store lastPrev to allow undo
   // - if skipped[] exists, serve smallest skipped token first
-  // - else increment currentToken to next (if available)
+  // - else increment currentToken (if <= lastTokenIssued)
   // -----------------------------
   async function callNext() {
+    // visual flash
+    setFlashCallNext(true);
+    setTimeout(() => setFlashCallNext(false), 700);
+
     const tokenRef = doc(db, "tokens", "session_" + (selectedSession || session));
     try {
       await runTransaction(db, async (tx) => {
         const snap = await tx.get(tokenRef);
+
         let cur = 0;
         let last = 0;
         let skippedArr = [];
@@ -422,24 +454,31 @@ export default function StaffDashboard() {
           skippedArr = Array.isArray(data.skipped) ? data.skipped.slice() : [];
         }
 
+        // Save previous value for undo
+        const prev = cur;
+
         if (skippedArr.length > 0) {
-          // serve the smallest skipped token first
+          // serve smallest skipped token first
           const nextSkipped = Math.min(...skippedArr);
-          // remove it from skipped
           const newSkipped = skippedArr.filter((t) => t !== nextSkipped);
           tx.update(tokenRef, {
             currentToken: nextSkipped,
             skipped: newSkipped,
             lastCalled: nextSkipped,
+            lastPrev: prev,
             lastCalledAt: serverTimestamp()
           });
         } else {
           // normal increment — go to next if available
           const candidate = cur + 1;
           if (candidate <= last) {
-            tx.update(tokenRef, { currentToken: candidate, lastCalled: candidate, lastCalledAt: serverTimestamp() });
+            tx.update(tokenRef, {
+              currentToken: candidate,
+              lastCalled: candidate,
+              lastPrev: prev,
+              lastCalledAt: serverTimestamp()
+            });
           } else {
-            // nothing to do; remain at current
             throw new Error("No next token available");
           }
         }
@@ -454,6 +493,9 @@ export default function StaffDashboard() {
   // Call Again (reannounce current)
   // -----------------------------
   async function callAgain() {
+    setFlashCallAgain(true);
+    setTimeout(() => setFlashCallAgain(false), 600);
+
     const tokenRef = doc(db, "tokens", "session_" + (selectedSession || session));
     try {
       await runTransaction(db, async (tx) => {
@@ -470,10 +512,37 @@ export default function StaffDashboard() {
   }
 
   // -----------------------------
+  // Undo Last Call (single step back)
+  // -----------------------------
+  async function undoLastCall() {
+    try {
+      const tokenRef = doc(db, "tokens", "session_" + (selectedSession || session));
+      await runTransaction(db, async (tx) => {
+        const snap = await tx.get(tokenRef);
+        if (!snap.exists()) throw new Error("No token doc");
+        const data = snap.data();
+        const prev = data.lastPrev;
+        if (prev === undefined || prev === null) throw new Error("No previous token to undo to");
+        tx.update(tokenRef, {
+          currentToken: prev,
+          lastCalled: prev,
+          lastPrev: null,
+          lastCalledAt: serverTimestamp()
+        });
+      });
+    } catch (err) {
+      alert("Undo failed: " + (err.message || err));
+      console.error(err);
+    }
+  }
+
+  // -----------------------------
   // Skip a token (mark as missed)
-  // If tokenToSkip equals current, we attempt to advance the current token (callNext)
   // -----------------------------
   async function skipToken(tokenToSkip) {
+    setFlashSkip(true);
+    setTimeout(() => setFlashSkip(false), 600);
+
     if (!window.confirm(`Mark token ${tokenToSkip} as NOT PRESENT (skip)?`)) return;
 
     const tokenRef = doc(db, "tokens", "session_" + (selectedSession || session));
@@ -482,9 +551,11 @@ export default function StaffDashboard() {
         const snap = await tx.get(tokenRef);
         let cur = 0;
         let skippedArr = [];
+        let last = 0;
         if (snap.exists()) {
           cur = snap.data().currentToken || 0;
           skippedArr = Array.isArray(snap.data().skipped) ? snap.data().skipped.slice() : [];
+          last = snap.data().lastTokenIssued || 0;
         }
         // add tokenToSkip if not present
         if (!skippedArr.includes(tokenToSkip)) skippedArr.push(tokenToSkip);
@@ -495,17 +566,15 @@ export default function StaffDashboard() {
 
         // If we're skipping the currently called token, then advance to next (callNext logic):
         if (tokenToSkip === cur) {
-          // find next candidate to serve: smallest skipped excluding current or cur+1 (if <= last)
-          const last = snap.exists() ? snap.data().lastTokenIssued || 0 : 0;
           const nextSkipped = skippedArr.filter((t) => t !== cur);
           if (nextSkipped.length > 0) {
             const candidate = Math.min(...nextSkipped);
             const newSkipped = skippedArr.filter((t) => t !== candidate && t !== cur);
-            tx.update(tokenRef, { currentToken: candidate, skipped: newSkipped, lastCalled: candidate, lastCalledAt: serverTimestamp() });
+            tx.update(tokenRef, { currentToken: candidate, skipped: newSkipped, lastCalled: candidate, lastPrev: cur, lastCalledAt: serverTimestamp() });
           } else {
             const candidate = cur + 1;
             if (candidate <= last) {
-              tx.update(tokenRef, { currentToken: candidate, lastCalled: candidate, lastCalledAt: serverTimestamp() });
+              tx.update(tokenRef, { currentToken: candidate, lastCalled: candidate, lastPrev: cur, lastCalledAt: serverTimestamp() });
             } else {
               // nothing to advance to; keep current as-is (but skipped recorded)
               tx.update(tokenRef, { lastCalled: cur, lastCalledAt: serverTimestamp() });
@@ -531,11 +600,66 @@ export default function StaffDashboard() {
         if (!snap.exists()) throw new Error("No token doc");
         let arr = Array.isArray(snap.data().skipped) ? snap.data().skipped.slice() : [];
         arr = arr.filter((t) => t !== tokenNumber);
-        tx.update(tokenRef, { currentToken: tokenNumber, skipped: arr, lastCalled: tokenNumber, lastCalledAt: serverTimestamp() });
+        tx.update(tokenRef, { currentToken: tokenNumber, skipped: arr, lastCalled: tokenNumber, lastPrev: snap.data().currentToken || 0, lastCalledAt: serverTimestamp() });
       });
     } catch (err) {
       alert("Serve skipped failed: " + (err.message || err));
       console.error(err);
+    }
+  }
+
+  // -----------------------------
+  // Mark Paid (customer paid at counter)
+  // - find order by token & session and set status = 'paid'
+  // -----------------------------
+  async function markPaidForCurrent() {
+    if (!current || current === 0) { alert("No current token"); return; }
+
+    try {
+      // find order with this token for this session (approved)
+      const q = query(
+        collection(db, "orders"),
+        where("token", "==", current),
+        where("session_id", "==", selectedSession || session),
+        limit(1)
+      );
+      const snap = await getDocs(q);
+      if (snap.empty) { alert("Order not found for current token"); return; }
+
+      const orderRef = doc(db, "orders", snap.docs[0].id);
+      await updateDoc(orderRef, { status: "paid", paidAt: serverTimestamp() });
+      alert(`Marked token ${current} as PAID`);
+    } catch (err) {
+      console.error("markPaid error", err);
+      alert("Failed to mark paid");
+    }
+  }
+
+  // -----------------------------
+  // Finish (kitchen finished) -> set status 'completed'
+  // - the token/order will no longer show in staff/approved lists
+  // -----------------------------
+  async function finishForCurrent() {
+    if (!current || current === 0) { alert("No current token"); return; }
+
+    if (!window.confirm(`Mark token ${current} as COMPLETED (remove from dashboard)?`)) return;
+
+    try {
+      const q = query(
+        collection(db, "orders"),
+        where("token", "==", current),
+        where("session_id", "==", selectedSession || session),
+        limit(1)
+      );
+      const snap = await getDocs(q);
+      if (snap.empty) { alert("Order not found for current token"); return; }
+
+      const orderRef = doc(db, "orders", snap.docs[0].id);
+      await updateDoc(orderRef, { status: "completed", completedAt: serverTimestamp() });
+      alert(`Token ${current} marked completed`);
+    } catch (err) {
+      console.error("finish error", err);
+      alert("Failed to finish order");
     }
   }
 
@@ -587,6 +711,8 @@ export default function StaffDashboard() {
   // Approve view navigation kept
   // -----------------------------
   function goApprovedPage() {
+    setFlashViewApproved(true);
+    setTimeout(() => setFlashViewApproved(false), 500);
     window.location.href = "/approved";
   }
 
@@ -597,6 +723,28 @@ export default function StaffDashboard() {
     return items.map((i) => `${i.quantity}×${i.name}`).join(", ");
   }
 
+  // helper: find approved/order by token locally (not guaranteed but helpful)
+  async function findOrderByToken(tokenNum) {
+    // first search local pending orders (unlikely to find approved)
+    const local = orders.find((o) => o.token === tokenNum);
+    if (local) return local;
+
+    // fallback to query approved/paid/completed
+    try {
+      const q = query(
+        collection(db, "orders"),
+        where("token", "==", tokenNum),
+        where("session_id", "==", selectedSession || session),
+        limit(1)
+      );
+      const snap = await getDocs(q);
+      if (!snap.empty) return { id: snap.docs[0].id, ...snap.docs[0].data() };
+    } catch (err) {
+      console.error("findOrderByToken err", err);
+    }
+    return null;
+  }
+
   // -----------------------------
   // UI rendering
   // -----------------------------
@@ -605,7 +753,7 @@ export default function StaffDashboard() {
       <div style={styles.container}>
         {/* header */}
         <div style={styles.headerRow}>
-          <div style={styles.titleBlock}>
+          <div>
             <div style={styles.title}>Waffle Lounge — Staff Dashboard</div>
             <div style={styles.subtitle}>Manage tokens, approve orders and serve customers</div>
           </div>
@@ -622,7 +770,9 @@ export default function StaffDashboard() {
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
               <div>
                 <div style={{ color: "#bfb39a" }}>Now Serving</div>
-                <div style={styles.bigToken}>{current || "-"}</div>
+                <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                  <div style={styles.bigToken}>{current || "-"}</div>
+                </div>
               </div>
 
               <div style={{ textAlign: "right" }}>
@@ -636,7 +786,6 @@ export default function StaffDashboard() {
                     value={selectedSession}
                     onChange={(e) => {
                       setSelectedSession(e.target.value);
-                      // restart manual fetch as well
                       fetchOrdersManual(e.target.value);
                     }}
                   >
@@ -668,20 +817,38 @@ export default function StaffDashboard() {
 
             {/* actions */}
             <div style={styles.actionsRow}>
-              <button style={{ ...styles.btn, ...styles.callBtn }} onClick={callNext}>
+              <button
+                onClick={callNext}
+                style={{
+                  ...styles.btn,
+                  ...styles.callBtn,
+                  ...(flashCallNext ? styles.flashGreen : {})
+                }}
+              >
                 Call Next
               </button>
 
-              <button style={{ ...styles.btn, ...styles.callAgainBtn }} onClick={callAgain}>
+              <button
+                onClick={callAgain}
+                style={{
+                  ...styles.btn,
+                  ...styles.callAgainBtn,
+                  ...(flashCallAgain ? styles.flashGold : {})
+                }}
+              >
                 Call Again
               </button>
 
               <button
-                style={{ ...styles.btn, ...styles.skipBtn }}
                 onClick={() => {
                   const tok = Number(prompt("Token to mark as not present (skip):", String(current || "")));
                   if (!tok) return;
                   skipToken(tok);
+                }}
+                style={{
+                  ...styles.btn,
+                  ...styles.skipBtn,
+                  ...(flashSkip ? styles.flashOrange : {})
                 }}
               >
                 Skip Token
@@ -700,7 +867,7 @@ export default function StaffDashboard() {
 
               <button
                 onClick={() => goApprovedPage()}
-                style={{ ...styles.btn, marginLeft: 8, background: "#6c5ce7", color: "#fff" }}
+                style={{ ...styles.btn, marginLeft: 8, background: "#333", color: "#ffd166" }}
               >
                 View Approved
               </button>
@@ -708,6 +875,16 @@ export default function StaffDashboard() {
               <button onClick={logout} style={{ ...styles.btn, marginLeft: 8, background: "#333", color: "#ffd166" }}>
                 Logout
               </button>
+
+              {/* Undo button visible when lastPrev exists and is different */}
+              {lastPrev !== null && lastPrev !== undefined && lastPrev !== current && (
+                <button
+                  onClick={undoLastCall}
+                  style={{ ...styles.btn, marginLeft: 8, background: "#6b6b6b", color: "#fff" }}
+                >
+                  Undo Last Call
+                </button>
+              )}
             </div>
 
             <div style={{ marginTop: 10, ...styles.smallNote }}>Auto-refresh (live) enabled. Manual refresh available.</div>
@@ -743,11 +920,8 @@ export default function StaffDashboard() {
                 </button>
 
                 <button
-                  style={{ ...styles.btn, background: "#444", color: "#ffd166", flex: 1 }}
-                  onClick={() => {
-                    // open approve page (same as view approved)
-                    goApprovedPage();
-                  }}
+                  style={{ ...styles.btn, background: "#222", color: "#ffd166", flex: 1 }}
+                  onClick={() => goApprovedPage()}
                 >
                   Approved Orders
                 </button>
@@ -808,6 +982,24 @@ export default function StaffDashboard() {
               </div>
             ))}
         </div>
+
+        {/* When current token has an order (quick actions Paid / Finish) */}
+        <div style={{ marginTop: 22 }}>
+          <h3>Current Token Actions</h3>
+          <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+            <div style={{ color: "#bfb39a" }}>Current: </div>
+            <div style={{ fontWeight: 900, fontSize: 20, color: "#ffd166" }}>{current || "-"}</div>
+
+            <button onClick={markPaidForCurrent} style={{ ...styles.btn, background: "#6ab04c", color: "#01100b" }}>
+              Mark Paid
+            </button>
+
+            <button onClick={finishForCurrent} style={{ ...styles.btn, background: "#6c5ce7", color: "#fff" }}>
+              Finish (Complete)
+            </button>
+          </div>
+        </div>
+
       </div>
     </div>
   );
