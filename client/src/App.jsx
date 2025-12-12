@@ -4,6 +4,7 @@ import { Route, Switch } from "wouter";
 import StaffDashboard from "./pages/staff.jsx";
 import ApprovedOrders from "./pages/approved.jsx";
 import StaffLogin from "./pages/StaffLogin";
+import Kitchen from "./pages/Kitchen";
 
 export default function App() {
   return (
@@ -27,6 +28,10 @@ export default function App() {
       <Route path="/">
         <StaffLogin />
       </Route>
+
+      <Route path="/kitchen">
+  <Kitchen />
+</Route>
 
       {/* 404 fallback */}
       <Route>
