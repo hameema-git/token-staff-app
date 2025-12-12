@@ -2,7 +2,7 @@
 import React, { useEffect, useState, useRef } from "react";
 import { useLocation } from "wouter";
 import { auth, db } from "../firebaseInit";
-import { signOut, onAuthStateChanged, getIdTokenResult } from "firebase/auth";
+import { signOut, onAuthStateChanged } from "firebase/auth";
 import {
   collection,
   query,
@@ -16,14 +16,33 @@ import {
 } from "firebase/firestore";
 
 const styles = {
-  page: { background: "#0b0b0b", color: "#f6e8c1", minHeight: "100vh", padding: 16 },
+  page: {
+    background: "#0b0b0b",
+    color: "#f6e8c1",
+    minHeight: "100vh",
+    padding: 16
+  },
   container: { maxWidth: 1100, margin: "auto" },
-  headerRow: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 },
+
+  headerRow: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 16
+  },
 
   title: { fontSize: 24, fontWeight: 900, color: "#ffd166" },
   subtitle: { fontSize: 13, color: "#bfb39a" },
 
-  sessionSelect: { padding: 8, borderRadius: 8, background: "#0f0f0f", border: "1px solid #222", color: "#fff" },
+  sessionSelect: {
+    padding: 10,
+    borderRadius: 8,
+    background: "#111",
+    border: "1px solid #333",
+    color: "#fff",
+    width: "100%",
+    maxWidth: 200
+  },
 
   card: {
     background: "#111",
@@ -34,7 +53,7 @@ const styles = {
   },
 
   btn: {
-    padding: "10px 12px",
+    padding: "10px 14px",
     borderRadius: 8,
     border: "none",
     cursor: "pointer",
@@ -48,48 +67,36 @@ const styles = {
 
 export default function Kitchen() {
   const [, navigate] = useLocation();
+  const unsubRef = useRef(null);
 
-  const [isKitchen, setIsKitchen] = useState(false);
-  const [staffName, setStaffName] = useState("");
+  // user
+  const [userEmail, setUserEmail] = useState("");
 
   // sessions
   const [sessions, setSessions] = useState([]);
   const [selectedSession, setSelectedSession] = useState("");
 
-  // paid / cooking orders
+  // kitchen orders
   const [orders, setOrders] = useState([]);
 
-  // Live listener ref
-  const unsubRef = useRef(null);
-
-  /* ----------------------------------------------------------------------------
-     AUTH CHECK — kitchen role only
-  ---------------------------------------------------------------------------- */
+  /* --------------------------------------------------------------------------
+      AUTH — allow ANY logged-in staff (no kitchen role check)
+  -------------------------------------------------------------------------- */
   useEffect(() => {
-    const unsub = onAuthStateChanged(auth, async (user) => {
-      if (!user) {
+    const unsub = onAuthStateChanged(auth, (u) => {
+      if (!u) {
         navigate("/staff-login");
         return;
       }
-
-      const token = await getIdTokenResult(user, true);
-
-      if (token.claims.role !== "kitchen") {
-        alert("Not authorized for Kitchen!");
-        navigate("/staff-login");
-        return;
-      }
-
-      setIsKitchen(true);
-      setStaffName(user.email);
+      setUserEmail(u.email || "Kitchen User");
     });
 
     return () => unsub();
   }, []);
 
-  /* ----------------------------------------------------------------------------
-     Load Sessions
-  ---------------------------------------------------------------------------- */
+  /* --------------------------------------------------------------------------
+      Load sessions for dropdown
+  -------------------------------------------------------------------------- */
   async function loadSessions() {
     const snap = await getDocs(collection(db, "tokens"));
     const list = snap.docs
@@ -104,42 +111,42 @@ export default function Kitchen() {
     loadSessions();
   }, []);
 
-  /* ----------------------------------------------------------------------------
-     Subscribe to paid & cooking orders
-  ---------------------------------------------------------------------------- */
+  /* --------------------------------------------------------------------------
+      Live Listener for orders (paid + cooking)
+  -------------------------------------------------------------------------- */
   useEffect(() => {
     if (!selectedSession) return;
 
     if (unsubRef.current) unsubRef.current();
 
-    const q = query(
+    const qOrders = query(
       collection(db, "orders"),
       where("session_id", "==", selectedSession),
       where("status", "in", ["paid", "cooking"]),
       orderBy("token", "asc")
     );
 
-    unsubRef.current = onSnapshot(q, (snap) => {
-      const list = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-      setOrders(list);
+    unsubRef.current = onSnapshot(qOrders, (snap) => {
+      const arr = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+      setOrders(arr);
     });
 
     return () => unsubRef.current && unsubRef.current();
   }, [selectedSession]);
 
-  /* ----------------------------------------------------------------------------
-     ACTIONS
-  ---------------------------------------------------------------------------- */
+  /* --------------------------------------------------------------------------
+      BUTTON ACTIONS
+  -------------------------------------------------------------------------- */
 
-  async function markCooking(orderId) {
-    await updateDoc(doc(db, "orders", orderId), {
+  async function markCooking(id) {
+    await updateDoc(doc(db, "orders", id), {
       status: "cooking",
       cookingAt: serverTimestamp()
     });
   }
 
-  async function markCompleted(orderId) {
-    await updateDoc(doc(db, "orders", orderId), {
+  async function markCompleted(id) {
+    await updateDoc(doc(db, "orders", id), {
       status: "completed",
       completedAt: serverTimestamp()
     });
@@ -150,9 +157,9 @@ export default function Kitchen() {
     navigate("/staff-login");
   }
 
-  /* ----------------------------------------------------------------------------
-     RENDER
-  ---------------------------------------------------------------------------- */
+  /* --------------------------------------------------------------------------
+      RENDER
+  -------------------------------------------------------------------------- */
   return (
     <div style={styles.page}>
       <div style={styles.container}>
@@ -161,12 +168,13 @@ export default function Kitchen() {
         <div style={styles.headerRow}>
           <div>
             <div style={styles.title}>Kitchen Dashboard</div>
-            <div style={styles.subtitle}>View & prepare orders</div>
+            <div style={styles.subtitle}>Prepare incoming orders</div>
           </div>
 
           <div style={{ textAlign: "right" }}>
-            <div style={styles.subtitle}>Logged in as:</div>
-            <div style={{ color: "#ffd166", fontWeight: 800 }}>{staffName}</div>
+            <div style={styles.subtitle}>Logged in as</div>
+            <div style={{ fontWeight: 700, color: "#ffd166" }}>{userEmail}</div>
+
             <button style={{ ...styles.btn, ...styles.logoutBtn, marginTop: 8 }} onClick={logout}>
               Logout
             </button>
@@ -174,7 +182,7 @@ export default function Kitchen() {
         </div>
 
         {/* SESSION SELECT */}
-        <div style={{ marginBottom: 18 }}>
+        <div style={{ marginBottom: 16 }}>
           <div style={styles.subtitle}>Session</div>
           <select
             style={styles.sessionSelect}
@@ -182,18 +190,23 @@ export default function Kitchen() {
             onChange={(e) => setSelectedSession(e.target.value)}
           >
             {sessions.map((s) => (
-              <option key={s} value={s}>{s}</option>
+              <option key={s} value={s}>
+                {s}
+              </option>
             ))}
           </select>
         </div>
 
-        <h3 style={{ marginBottom: 8 }}>Orders to Prepare</h3>
+        <h3 style={{ marginBottom: 10 }}>Orders to Prepare</h3>
 
-        {orders.length === 0 && <div style={{ color: "#888" }}>No orders yet</div>}
+        {orders.length === 0 && (
+          <div style={{ color: "#777" }}>No orders yet</div>
+        )}
 
+        {/* ORDERS LIST */}
         {orders.map((o) => (
           <div key={o.id} style={styles.card}>
-            <div style={{ fontSize: 18, fontWeight: 900 }}>
+            <div style={{ fontSize: 20, fontWeight: 900 }}>
               Token #{o.token}
             </div>
 
@@ -213,8 +226,8 @@ export default function Kitchen() {
             <div style={{ marginTop: 12 }}>
               {o.status === "paid" && (
                 <button
-                  onClick={() => markCooking(o.id)}
                   style={{ ...styles.btn, ...styles.startBtn }}
+                  onClick={() => markCooking(o.id)}
                 >
                   Start Cooking
                 </button>
@@ -222,8 +235,8 @@ export default function Kitchen() {
 
               {o.status === "cooking" && (
                 <button
-                  onClick={() => markCompleted(o.id)}
                   style={{ ...styles.btn, ...styles.finishBtn }}
+                  onClick={() => markCompleted(o.id)}
                 >
                   Finish & Deliver
                 </button>
@@ -231,6 +244,7 @@ export default function Kitchen() {
             </div>
           </div>
         ))}
+
       </div>
     </div>
   );
