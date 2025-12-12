@@ -3,44 +3,50 @@ import { Route, Switch } from "wouter";
 
 import StaffDashboard from "./pages/staff.jsx";
 import ApprovedOrders from "./pages/approved.jsx";
-import CompletedOrders from "./pages/Completed.jsx"; // ⬅ added
+import CompletedOrders from "./pages/Completed.jsx";
+import PaymentCenter from "./pages/PaymentCenter.jsx";   // ⬅ NEW
 import StaffLogin from "./pages/StaffLogin";
 import Kitchen from "./pages/Kitchen";
 
 export default function App() {
   return (
     <Switch>
-      {/* Login page */}
+      {/* Login */}
       <Route path="/staff-login">
         <StaffLogin />
       </Route>
 
-      {/* Staff dashboard */}
+      {/* Staff Dashboard */}
       <Route path="/staff">
         <StaffDashboard />
       </Route>
 
-      {/* Approved orders page */}
+      {/* Approved Orders */}
       <Route path="/approved">
         <ApprovedOrders />
       </Route>
 
-      {/* Completed orders page */}
+      {/* Completed Orders */}
       <Route path="/completed">
-        <CompletedOrders /> 
+        <CompletedOrders />
       </Route>
 
-      {/* Kitchen page */}
+      {/* Payment Center */}
+      <Route path="/payment">
+        <PaymentCenter />
+      </Route>
+
+      {/* Kitchen */}
       <Route path="/kitchen">
         <Kitchen />
       </Route>
 
-      {/* Default route → redirect to login */}
+      {/* Default → Login */}
       <Route path="/">
         <StaffLogin />
       </Route>
 
-      {/* 404 fallback */}
+      {/* 404 */}
       <Route>
         <div style={{ color: "white", padding: 20 }}>404 - Not Found</div>
       </Route>
