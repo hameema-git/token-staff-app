@@ -1,3 +1,4 @@
+// client/src/pages/StaffDashboard.jsx
 import React, { useEffect, useState, useRef } from "react";
 import { useLocation } from "wouter";
 import { auth, db, serverTimestamp } from "../firebaseInit";
@@ -5,29 +6,31 @@ import { signOut, onAuthStateChanged, getIdTokenResult } from "firebase/auth";
 import {
   collection,
   query,
+  where,
   orderBy,
   getDocs,
   doc,
+  getDoc,
   runTransaction,
   setDoc,
-  getDoc,
-  deleteDoc,
   updateDoc,
-  onSnapshot,
-  where
+  deleteDoc,
+  onSnapshot
 } from "firebase/firestore";
 
-/* ---------- StaffDashboard.jsx
-   - Staff sees only pending orders
-   - Approve assigns token; if order.paid -> becomes paid and goes to kitchen
-   - Staff can markPaid from modal (paid flag + paidAt)
-   - Skipped tokens array (tokens/session_x.skipped)
-   - Call Next respects skipped tokens (does NOT auto-serve skipped)
-   - ServeSkipped explicit action
-   - Undo uses lastPrev stored in tokens doc
-   - Logout top-right
-   - Responsive layout
-*/
+/**
+ * StaffDashboard.jsx
+ * - Now Serving (clickable) inside the live card (Option A)
+ * - Staff view: shows only pending orders
+ * - Approve assigns token. If order.paid === true at approve time => status "paid" (sent to kitchen)
+ * - markPaid: if already approved -> becomes "paid", else sets paid flag
+ * - Skipped tokens kept in tokens/session_x.skipped (array)
+ * - Call Next respects skipped tokens (does NOT auto-serve skipped)
+ * - Serve skipped explicit action
+ * - Undo uses lastPrev stored in tokens doc
+ * - Logout in top-right
+ * - Responsive layout (single column on small screens)
+ */
 
 const base = {
   page: { background: "#0b0b0b", color: "#f6e8c1", minHeight: "100vh", padding: 16, fontFamily: "'Segoe UI', Roboto, Arial, sans-serif" },
@@ -55,18 +58,17 @@ const base = {
   deleteBtn: { background: "#ff6b6b", color: "#fff", flex: 1 },
   modalBackdrop: { position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 9999 },
   modal: { background: "#0f0f0f", padding: 18, borderRadius: 10, width: "min(920px, 96%)", color: "#f6e8c1", boxShadow: "0 6px 24px rgba(0,0,0,0.6)" },
-  topRightLogout: { position: "absolute", right: 18, top: 18 },
   smallNote: { color: "#bfb39a", fontSize: 13 }
 };
 
 export default function StaffDashboard() {
   const [, navigate] = useLocation();
 
-  // auth & staff
+  // Auth
   const [isStaff, setIsStaff] = useState(false);
   const [staffName, setStaffName] = useState("");
 
-  // sessions & tokens
+  // Sessions / tokens
   const [sessions, setSessions] = useState([]);
   const [session, setSession] = useState("Session 1");
   const [selectedSession, setSelectedSession] = useState("");
@@ -74,18 +76,18 @@ export default function StaffDashboard() {
   const [lastIssued, setLastIssued] = useState(0);
   const [skipped, setSkipped] = useState([]);
 
-  // orders (staff sees only pending)
+  // Orders (pending only for staff)
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(false);
 
-  // subscriptions & refs
+  // Refs & subscriptions
   const tokensUnsubRef = useRef(null);
   const ordersUnsubRef = useRef(null);
   const intervalRef = useRef(null);
   const [subscribing, setSubscribing] = useState(false);
 
   // UI state
-  const [loadingAction, setLoadingAction] = useState(""); // '', 'callNext', 'approve', 'markPaid', etc.
+  const [loadingAction, setLoadingAction] = useState(""); // '', 'callNext', 'approve', 'markPaid', ...
   const [modalOrder, setModalOrder] = useState(null);
   const [isMobile, setIsMobile] = useState(window.innerWidth < 720);
 
@@ -95,7 +97,7 @@ export default function StaffDashboard() {
     return () => window.removeEventListener("resize", onResize);
   }, []);
 
-  // --- auth listener
+  // ---------- Auth listener ----------
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (user) => {
       if (!user) {
@@ -120,11 +122,12 @@ export default function StaffDashboard() {
         navigate("/staff-login");
       }
     });
+
     return () => unsub();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // --- load sessions
+  // ---------- Load sessions (active + tokens docs) ----------
   async function loadSessions() {
     try {
       const activeSnap = await getDoc(doc(db, "settings", "activeSession"));
@@ -150,7 +153,7 @@ export default function StaffDashboard() {
     loadSessions();
   }, []);
 
-  // --- subscriptions
+  // ---------- Subscriptions (tokens + pending orders) ----------
   function startSubscriptions(sess) {
     if (!sess) return;
     if (subscribing) return;
@@ -174,9 +177,7 @@ export default function StaffDashboard() {
         setSkipped(Array.isArray(data.skipped) ? data.skipped.slice().sort((a, b) => a - b) : []);
         setLoading(false);
       },
-      (err) => {
-        console.error("tokens onSnapshot", err);
-      }
+      (err) => console.error("tokens onSnapshot", err)
     );
 
     const ordersQ = query(
@@ -223,6 +224,7 @@ export default function StaffDashboard() {
     return () => stopSubscriptions();
   }, []);
 
+  // ---------- Manual fetch fallback ----------
   async function fetchOrdersManual(sess) {
     try {
       setLoading(true);
@@ -242,7 +244,7 @@ export default function StaffDashboard() {
     }
   }
 
-  // --- logout
+  // ---------- Logout ----------
   async function logout() {
     try {
       await signOut(auth);
@@ -255,7 +257,9 @@ export default function StaffDashboard() {
     }
   }
 
-  /* -------- Token actions -------- */
+  // ---------- Token Actions ----------
+
+  // Call next: moves to next numeric token not in skipped[]
   async function callNext() {
     if (loadingAction) return;
     setLoadingAction("callNext");
@@ -269,11 +273,16 @@ export default function StaffDashboard() {
         const last = data.lastTokenIssued || 0;
         const skippedArr = Array.isArray(data.skipped) ? data.skipped.slice() : [];
 
-        // find next numeric candidate not in skipped
+        // find next numeric candidate that is NOT skipped
         let candidate = cur + 1;
         while (skippedArr.includes(candidate) && candidate <= last) candidate++;
         if (candidate <= last) {
-          tx.update(ref, { currentToken: candidate, lastCalled: candidate, lastCalledAt: serverTimestamp(), lastPrev: cur });
+          tx.update(ref, {
+            currentToken: candidate,
+            lastCalled: candidate,
+            lastCalledAt: serverTimestamp(),
+            lastPrev: cur
+          });
         } else {
           throw new Error("No next token available");
         }
@@ -286,6 +295,7 @@ export default function StaffDashboard() {
     }
   }
 
+  // Call again: re-announce current
   async function callAgain() {
     if (loadingAction) return;
     setLoadingAction("callAgain");
@@ -306,6 +316,7 @@ export default function StaffDashboard() {
     }
   }
 
+  // Skip token: add to skipped[]. If skipping current -> advance to next non-skipped numeric or clear to 0
   async function skipToken() {
     if (loadingAction) return;
     setLoadingAction("skipToken");
@@ -321,19 +332,27 @@ export default function StaffDashboard() {
         if (!snap.exists()) throw new Error("Session missing");
         let { skipped = [], currentToken = 0, lastTokenIssued = 0 } = snap.data();
         skipped = Array.isArray(skipped) ? skipped.slice() : [];
+
         if (!skipped.includes(tok)) {
           skipped.push(tok);
           skipped.sort((a, b) => a - b);
         }
+
         tx.update(ref, { skipped });
 
-        // if skipping current token advance to next non-skipped numeric or clear
+        // if skipping current token -> advance to next non-skipped numeric or clear current
         if (tok === currentToken) {
           let candidate = currentToken + 1;
           while (skipped.includes(candidate) && candidate <= lastTokenIssued) candidate++;
           if (candidate <= lastTokenIssued) {
-            tx.update(ref, { currentToken: candidate, lastCalled: candidate, lastCalledAt: serverTimestamp(), lastPrev: currentToken });
+            tx.update(ref, {
+              currentToken: candidate,
+              lastCalled: candidate,
+              lastCalledAt: serverTimestamp(),
+              lastPrev: currentToken
+            });
           } else {
+            // no candidate -> clear current to avoid showing skipped as current
             tx.update(ref, { currentToken: 0, lastPrev: currentToken, lastCalled: currentToken, lastCalledAt: serverTimestamp() });
           }
         }
@@ -346,6 +365,7 @@ export default function StaffDashboard() {
     }
   }
 
+  // Serve skipped explicitly
   async function serveSkipped(tok) {
     if (loadingAction) return;
     setLoadingAction("serveSkipped");
@@ -359,7 +379,13 @@ export default function StaffDashboard() {
         skipped = Array.isArray(skipped) ? skipped.slice() : [];
         if (!skipped.includes(tok)) throw new Error("Token not in skipped list");
         const newArr = skipped.filter((x) => x !== tok);
-        tx.update(ref, { currentToken: tok, skipped: newArr, lastCalled: tok, lastCalledAt: serverTimestamp(), lastPrev: currentToken });
+        tx.update(ref, {
+          currentToken: tok,
+          skipped: newArr,
+          lastCalled: tok,
+          lastCalledAt: serverTimestamp(),
+          lastPrev: currentToken
+        });
       });
     } catch (err) {
       alert("Serve skipped failed: " + (err.message || err));
@@ -369,6 +395,7 @@ export default function StaffDashboard() {
     }
   }
 
+  // Undo last: revert to lastPrev
   async function undoLast() {
     if (loadingAction) return;
     setLoadingAction("undo");
@@ -389,11 +416,13 @@ export default function StaffDashboard() {
     }
   }
 
+  // Start new session (creates tokens/session_X and sets activeSession)
   async function startNewSession() {
     if (loadingAction) return;
     setLoadingAction("startSession");
     try {
       await loadSessions();
+      // derive next numeric session name
       let max = 0;
       sessions.forEach((s) => {
         const n = Number((s || "").split(" ")[1]) || 0;
@@ -419,7 +448,9 @@ export default function StaffDashboard() {
     }
   }
 
-  /* -------- Orders: approve / markPaid / update / delete -------- */
+  // ---------- Orders: approve / markPaid / update / delete ----------
+
+  // Approve: assign token. If order.paid === true -> set status "paid"
   async function approveOrder(orderId) {
     if (loadingAction) return;
     setLoadingAction("approve");
@@ -438,11 +469,23 @@ export default function StaffDashboard() {
 
         tx.update(tokenRef, { lastTokenIssued: next });
 
-        // If already paid -> immediately mark paid so it goes to kitchen
         if (order.paid) {
-          tx.update(orderRef, { token: next, status: "paid", approvedAt: serverTimestamp(), paidAt: order.paidAt || serverTimestamp(), session_id: selectedSession || session });
+          // already paid -> send to kitchen immediately
+          tx.update(orderRef, {
+            token: next,
+            status: "paid",
+            approvedAt: serverTimestamp(),
+            paidAt: order.paidAt || serverTimestamp(),
+            session_id: selectedSession || session
+          });
         } else {
-          tx.update(orderRef, { token: next, status: "approved", approvedAt: serverTimestamp(), session_id: selectedSession || session });
+          // not paid -> approved only
+          tx.update(orderRef, {
+            token: next,
+            status: "approved",
+            approvedAt: serverTimestamp(),
+            session_id: selectedSession || session
+          });
         }
       });
       setModalOrder(null);
@@ -454,6 +497,7 @@ export default function StaffDashboard() {
     }
   }
 
+  // markPaid: if already approved -> becomes 'paid' (send to kitchen), else just mark paid=true
   async function markPaid(orderId) {
     if (loadingAction) return;
     setLoadingAction("markPaid");
@@ -503,6 +547,31 @@ export default function StaffDashboard() {
     }
   }
 
+  // When clicking the big current token, lookup order (approved/paid) by token
+  async function openCurrentTokenModal() {
+    if (!current) return;
+    try {
+      // search orders across statuses for this session/token:
+      const q = query(
+        collection(db, "orders"),
+        where("session_id", "==", selectedSession || session),
+        where("token", "==", current),
+        orderBy("createdAt", "asc")
+      );
+      const snap = await getDocs(q);
+      if (!snap.empty) {
+        const docData = snap.docs[0];
+        setModalOrder({ id: docData.id, ...docData.data() });
+      } else {
+        alert("No order found for current token in this session.");
+      }
+    } catch (err) {
+      console.error("openCurrentTokenModal", err);
+      alert("Failed to open current token details");
+    }
+  }
+
+  // Helpers
   function formatItems(items = []) {
     return (items || []).map((i) => `${i.quantity}×${i.name}`).join(", ");
   }
@@ -518,10 +587,11 @@ export default function StaffDashboard() {
     }
   }
 
+  // ---------- Render ----------
   return (
     <div style={{ ...base.page }}>
       <div style={{ ...base.container }}>
-        {/* logout top-right + kitchen link */}
+        {/* top-right: Kitchen link + Logout */}
         <div style={{ position: "absolute", right: 16, top: 12, display: "flex", gap: 8 }}>
           <button
             onClick={() => navigate("/kitchen")}
@@ -529,7 +599,6 @@ export default function StaffDashboard() {
           >
             Kitchen
           </button>
-
           <button onClick={logout} style={{ ...base.btn, background: "#333", color: "#ffd166", borderRadius: 8 }}>
             Logout
           </button>
@@ -549,41 +618,45 @@ export default function StaffDashboard() {
             <div style={{ fontWeight: 800 }}>{session}</div>
           </div>
         </div>
-<div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
 
-  {/* CLICKABLE CURRENT TOKEN */}
-  <div
-    onClick={() => {
-      if (!current) return;
-      const found = orders.find(o => o.token === current);
-      if (found) setModalOrder(found);
-    }}
-    style={{ cursor: "pointer" }}
-  >
-    <div style={base.smallMuted}>Now Serving</div>
-    <div style={base.bigToken}>{current || "-"}</div>
-  </div>
+        {/* top panels */}
+        <div style={{ ...base.topPanel, gridTemplateColumns: isMobile ? "1fr" : base.topPanel.gridTemplateColumns }}>
+          {/* left: live card */}
+          <div style={base.liveCard}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+              {/* Clickable Now Serving (inside live card per Option A) */}
+              <div
+                onClick={() => {
+                  // open modal for current token (search across orders)
+                  if (!current) return;
+                  openCurrentTokenModal();
+                }}
+                style={{ cursor: "pointer" }}
+              >
+                <div style={base.smallMuted}>Now Serving</div>
+                <div style={base.bigToken}>{current || "-"}</div>
+              </div>
 
-  {/* RIGHT SIDE (UNCHANGED) */}
-  <div style={{ textAlign: "right" }}>
-    <div style={base.smallMuted}>Last Issued</div>
-    <div style={{ fontWeight: 900, fontSize: 20, color: "#ffd166" }}>{lastIssued || 0}</div>
+              <div style={{ textAlign: "right" }}>
+                <div style={base.smallMuted}>Last Issued</div>
+                <div style={{ fontWeight: 900, fontSize: 20, color: "#ffd166" }}>{lastIssued || 0}</div>
 
-    <div style={{ marginTop: 8 }}>
-      <div style={base.smallMuted}>Session</div>
-      <select
-        style={base.sessionSelect}
-        value={selectedSession}
-        onChange={(e) => setSelectedSession(e.target.value)}
-      >
-        {sessions.map((s) => (
-          <option key={s} value={s}>{s}</option>
-        ))}
-      </select>
-    </div>
-  </div>
-
-</div>
+                <div style={{ marginTop: 8 }}>
+                  <div style={base.smallMuted}>Session</div>
+                  <select
+                    style={base.sessionSelect}
+                    value={selectedSession}
+                    onChange={(e) => setSelectedSession(e.target.value)}
+                  >
+                    {sessions.map((s) => (
+                      <option key={s} value={s}>
+                        {s}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            </div>
 
             {/* skipped */}
             <div style={{ marginTop: 12 }}>
@@ -591,7 +664,13 @@ export default function StaffDashboard() {
               <div style={{ marginTop: 8 }}>
                 {skipped && skipped.length ? (
                   skipped.map((t) => (
-                    <span key={t} style={base.skippedChip} onClick={() => { if (window.confirm(`Serve skipped token ${t} now?`)) serveSkipped(t); }}>
+                    <span
+                      key={t}
+                      style={base.skippedChip}
+                      onClick={() => {
+                        if (window.confirm(`Serve skipped token ${t} now?`)) serveSkipped(t);
+                      }}
+                    >
                       {t}
                     </span>
                   ))
@@ -603,24 +682,42 @@ export default function StaffDashboard() {
 
             {/* actions */}
             <div style={base.actionsRow}>
-              <button onClick={callNext} disabled={!!loadingAction} style={{ ...base.btn, ...base.callBtn, opacity: loadingAction === "callNext" ? 0.6 : 1 }}>
+              <button
+                onClick={callNext}
+                disabled={!!loadingAction}
+                style={{ ...base.btn, ...base.callBtn, opacity: loadingAction === "callNext" ? 0.6 : 1 }}
+              >
                 {loadingAction === "callNext" ? "Processing..." : "Call Next"}
               </button>
 
-              <button onClick={callAgain} disabled={!!loadingAction} style={{ ...base.btn, ...base.callAgainBtn, opacity: loadingAction === "callAgain" ? 0.6 : 1 }}>
+              <button
+                onClick={callAgain}
+                disabled={!!loadingAction}
+                style={{ ...base.btn, ...base.callAgainBtn, opacity: loadingAction === "callAgain" ? 0.6 : 1 }}
+              >
                 {loadingAction === "callAgain" ? "Calling..." : "Call Again"}
               </button>
 
-              <button onClick={skipToken} disabled={!!loadingAction} style={{ ...base.btn, ...base.skipBtn, opacity: loadingAction === "skipToken" ? 0.6 : 1 }}>
+              <button
+                onClick={skipToken}
+                disabled={!!loadingAction}
+                style={{ ...base.btn, ...base.skipBtn, opacity: loadingAction === "skipToken" ? 0.6 : 1 }}
+              >
                 {loadingAction === "skipToken" ? "Skipping..." : "Skip Token"}
               </button>
             </div>
 
             {/* secondary row */}
             <div style={{ marginTop: 8 }}>
-              <button onClick={() => fetchOrdersManual(selectedSession || session)} style={{ ...base.btn, ...base.refreshBtn }}>Refresh Orders</button>
+              <button onClick={() => fetchOrdersManual(selectedSession || session)} style={{ ...base.btn, ...base.refreshBtn }}>
+                Refresh Orders
+              </button>
 
-              <button onClick={startNewSession} disabled={!!loadingAction} style={{ ...base.btn, marginLeft: 8, background: "#ffd166", color: "#111", opacity: loadingAction === "startSession" ? 0.6 : 1 }}>
+              <button
+                onClick={startNewSession}
+                disabled={!!loadingAction}
+                style={{ ...base.btn, marginLeft: 8, background: "#ffd166", color: "#111", opacity: loadingAction === "startSession" ? 0.6 : 1 }}
+              >
                 {loadingAction === "startSession" ? "Starting..." : "Start New Session"}
               </button>
 
@@ -632,7 +729,7 @@ export default function StaffDashboard() {
             <div style={{ marginTop: 10, ...base.smallNote }}>Auto-refresh (live) enabled. Manual refresh available.</div>
           </div>
 
-          {/* right: controls */}
+          {/* right panel: session controls */}
           <div style={{ background: "#111", padding: 14, borderRadius: 12 }}>
             <div style={{ fontWeight: 800, marginBottom: 8 }}>Session Controls</div>
 
@@ -650,7 +747,14 @@ export default function StaffDashboard() {
             <div style={{ marginTop: 14 }}>
               <div style={base.smallMuted}>Quick actions</div>
               <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
-                <button onClick={() => { if (!skipped.length) return alert("No skipped tokens"); const tok = Number(prompt("Enter token to serve:", skipped[0])); if (tok) serveSkipped(tok); }} style={{ ...base.btn, background: "#2ecc71", color: "#01110b", flex: 1 }}>
+                <button
+                  onClick={() => {
+                    if (!skipped.length) return alert("No skipped tokens");
+                    const tok = Number(prompt("Enter token to serve:", skipped[0]));
+                    if (tok) serveSkipped(tok);
+                  }}
+                  style={{ ...base.btn, background: "#2ecc71", color: "#01110b", flex: 1 }}
+                >
                   Serve Skipped
                 </button>
 
@@ -662,7 +766,7 @@ export default function StaffDashboard() {
           </div>
         </div>
 
-        {/* pending orders list */}
+        {/* pending orders list (staff sees only pending) */}
         <div style={base.approveSection}>
           <h3>Pending Orders (Session: {selectedSession || session})</h3>
 
@@ -688,7 +792,11 @@ export default function StaffDashboard() {
               </div>
 
               <div style={base.orderActions}>
-                <button onClick={(e) => { e.stopPropagation(); approveOrder(order.id); }} disabled={!!loadingAction} style={{ ...base.btn, ...base.approveBtn }}>
+                <button
+                  onClick={(e) => { e.stopPropagation(); approveOrder(order.id); }}
+                  disabled={!!loadingAction}
+                  style={{ ...base.btn, ...base.approveBtn }}
+                >
                   {loadingAction === "approve" ? "Approving..." : "Approve"}
                 </button>
 
@@ -716,7 +824,7 @@ export default function StaffDashboard() {
                 </div>
 
                 <div style={{ textAlign: "right" }}>
-                  <div style={{ ...base.smallMuted }}>Status</div>
+                  <div style={base.smallMuted}>Status</div>
                   <div style={{ fontWeight: 800, color: "#ffd166" }}>{modalOrder.status}</div>
 
                   <div style={{ marginTop: 8 }}>
@@ -743,11 +851,22 @@ export default function StaffDashboard() {
               </div>
 
               <div style={{ display: "flex", gap: 8, marginTop: 14, flexWrap: "wrap" }}>
-                <button onClick={() => approveOrder(modalOrder.id)} disabled={!!loadingAction} style={{ ...base.btn, ...base.approveBtn }}>
-                  {loadingAction === "approve" ? "Approving..." : modalOrder.paid ? "Approve & Send to Kitchen" : "Approve (awaiting payment)"}
+                <button
+                  onClick={() => approveOrder(modalOrder.id)}
+                  disabled={!!loadingAction}
+                  style={{ ...base.btn, ...base.approveBtn }}
+                >
+                  {loadingAction === "approve" ? "Approving..." : (modalOrder.paid ? "Approve & Send to Kitchen" : "Approve (awaiting payment)")}
                 </button>
 
-                <button onClick={() => { if (!window.confirm("Mark this order as PAID?")) return; markPaid(modalOrder.id); }} disabled={!!loadingAction || modalOrder.paid} style={{ ...base.btn, ...base.callAgainBtn }}>
+                <button
+                  onClick={() => {
+                    if (!window.confirm("Mark this order as PAID?")) return;
+                    markPaid(modalOrder.id);
+                  }}
+                  disabled={!!loadingAction || modalOrder.paid}
+                  style={{ ...base.btn, ...base.callAgainBtn }}
+                >
                   {loadingAction === "markPaid" ? "Marking..." : (modalOrder.paid ? "Already Paid" : "Mark Paid")}
                 </button>
 
