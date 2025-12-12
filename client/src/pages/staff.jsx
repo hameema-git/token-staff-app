@@ -427,44 +427,35 @@ export default function StaffDashboard() {
 
     let { skipped = [], currentToken, lastTokenIssued } = snap.data();
 
-    // --- ALWAYS add the skipped token ---
+    // Add to skipped list (always)
     if (!skipped.includes(tok)) {
       skipped.push(tok);
       skipped.sort((a, b) => a - b);
     }
 
-    // Save updated skipped list
+    // Update skipped list only
     tx.update(ref, { skipped });
 
-    // If the skipped token is NOT the current token → do nothing else
+    // If token is NOT current, stop here (do NOT auto serve anything)
     if (tok !== currentToken) return;
 
-    // --- If the CURRENT TOKEN is being skipped: move to the next serveable token ---
-    const remaining = skipped.filter((x) => x !== currentToken);
+    // If current token is being skipped → move to next number ONLY
+    const next = currentToken + 1;
 
-    if (remaining.length > 0) {
-      // Serve the smallest skipped token
-      const next = remaining[0];
-
+    if (next <= lastTokenIssued) {
       tx.update(ref, {
         currentToken: next,
         lastPrev: currentToken,
         lastCalled: next,
         lastCalledAt: serverTimestamp()
       });
-
     } else {
-      // No other skipped tokens → go to next sequential token
-      const next = currentToken + 1;
-
-      if (next <= lastTokenIssued) {
-        tx.update(ref, {
-          currentToken: next,
-          lastPrev: currentToken,
-          lastCalled: next,
-          lastCalledAt: serverTimestamp()
-        });
-      }
+      // no more tokens → just keep current token skipped
+      tx.update(ref, {
+        lastPrev: currentToken,
+        lastCalled: currentToken,
+        lastCalledAt: serverTimestamp()
+      });
     }
   });
 }
@@ -672,7 +663,7 @@ export default function StaffDashboard() {
                 Refresh Orders
               </button>
 
-              <button
+              {/* <button
                 onClick={() => navigate("/approved")}
                 style={{
                   ...styles.btn,
@@ -682,7 +673,7 @@ export default function StaffDashboard() {
                 }}
               >
                 View Approved
-              </button>
+              </button> */}
 
               <button
                 onClick={logout}
