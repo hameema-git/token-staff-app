@@ -1,4 +1,3 @@
-// client/src/pages/StaffDashboard.jsx
 import React, { useEffect, useState, useRef } from "react";
 import { useLocation } from "wouter";
 import { auth, db, serverTimestamp } from "../firebaseInit";
@@ -18,21 +17,21 @@ import {
   where
 } from "firebase/firestore";
 
-/**
- * StaffDashboard.jsx
- * - Option A workflow:
- *    Approve -> status = "approved" (if unpaid)
- *    If paid && approved -> status = "paid" (sent to kitchen)
- *    If paid before approve: approve will set status="paid" immediately.
- *
- * - Staff view: only pending orders (status === "pending")
- * - Kitchen view (external page): only orders where status === "paid"
- */
+/* ---------- StaffDashboard.jsx
+   - Staff sees only pending orders
+   - Approve assigns token; if order.paid -> becomes paid and goes to kitchen
+   - Staff can markPaid from modal (paid flag + paidAt)
+   - Skipped tokens array (tokens/session_x.skipped)
+   - Call Next respects skipped tokens (does NOT auto-serve skipped)
+   - ServeSkipped explicit action
+   - Undo uses lastPrev stored in tokens doc
+   - Logout top-right
+   - Responsive layout
+*/
 
-/* ---------- Styles ---------- */
 const base = {
   page: { background: "#0b0b0b", color: "#f6e8c1", minHeight: "100vh", padding: 16, fontFamily: "'Segoe UI', Roboto, Arial, sans-serif" },
-  container: { maxWidth: 1100, margin: "auto" },
+  container: { maxWidth: 1100, margin: "auto", position: "relative" },
   headerRow: { display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, marginBottom: 12 },
   title: { fontSize: 22, fontWeight: 900, color: "#ffd166" },
   subtitle: { color: "#bfb39a", fontSize: 13 },
@@ -69,11 +68,11 @@ export default function StaffDashboard() {
 
   // sessions & tokens
   const [sessions, setSessions] = useState([]);
-  const [session, setSession] = useState("Session 1"); // active session
+  const [session, setSession] = useState("Session 1");
   const [selectedSession, setSelectedSession] = useState("");
   const [current, setCurrent] = useState(0);
   const [lastIssued, setLastIssued] = useState(0);
-  const [skipped, setSkipped] = useState([]); // numbers
+  const [skipped, setSkipped] = useState([]);
 
   // orders (staff sees only pending)
   const [orders, setOrders] = useState([]);
@@ -86,11 +85,10 @@ export default function StaffDashboard() {
   const [subscribing, setSubscribing] = useState(false);
 
   // UI state
-  const [loadingAction, setLoadingAction] = useState(""); // "", "callNext", etc.
-  const [modalOrder, setModalOrder] = useState(null); // order object for popup
+  const [loadingAction, setLoadingAction] = useState(""); // '', 'callNext', 'approve', 'markPaid', etc.
+  const [modalOrder, setModalOrder] = useState(null);
   const [isMobile, setIsMobile] = useState(window.innerWidth < 720);
 
-  // --- responsive resize handler
   useEffect(() => {
     const onResize = () => setIsMobile(window.innerWidth < 720);
     window.addEventListener("resize", onResize);
@@ -126,7 +124,7 @@ export default function StaffDashboard() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // --- load sessions (active + token docs)
+  // --- load sessions
   async function loadSessions() {
     try {
       const activeSnap = await getDoc(doc(db, "settings", "activeSession"));
@@ -159,7 +157,6 @@ export default function StaffDashboard() {
     setSubscribing(true);
     setLoading(true);
 
-    // tokens doc
     const tokenRef = doc(db, "tokens", "session_" + sess);
     tokensUnsubRef.current = onSnapshot(
       tokenRef,
@@ -182,13 +179,13 @@ export default function StaffDashboard() {
       }
     );
 
-    // pending orders listener
     const ordersQ = query(
       collection(db, "orders"),
       where("status", "==", "pending"),
       where("session_id", "==", sess),
       orderBy("createdAt", "asc")
     );
+
     ordersUnsubRef.current = onSnapshot(
       ordersQ,
       (snap) => {
@@ -199,7 +196,7 @@ export default function StaffDashboard() {
       (err) => console.error("orders onSnapshot", err)
     );
 
-    // fallback: manual fetch every 5s
+    // fallback manual fetch every 5s
     intervalRef.current = setInterval(() => {
       fetchOrdersManual(sess).catch(() => {});
     }, 5000);
@@ -215,7 +212,6 @@ export default function StaffDashboard() {
     setSubscribing(false);
   }
 
-  // restart when selectedSession or staff toggles
   useEffect(() => {
     if (!isStaff) return;
     stopSubscriptions();
@@ -227,7 +223,6 @@ export default function StaffDashboard() {
     return () => stopSubscriptions();
   }, []);
 
-  // --- manual fetch fallback
   async function fetchOrdersManual(sess) {
     try {
       setLoading(true);
@@ -247,7 +242,7 @@ export default function StaffDashboard() {
     }
   }
 
-  // --- logout (top-right)
+  // --- logout
   async function logout() {
     try {
       await signOut(auth);
@@ -260,9 +255,7 @@ export default function StaffDashboard() {
     }
   }
 
-  /* ------------- Token actions ------------- */
-
-  // Call next: moves to next numeric token NOT in skipped[] (does not auto-serve skipped)
+  /* -------- Token actions -------- */
   async function callNext() {
     if (loadingAction) return;
     setLoadingAction("callNext");
@@ -276,7 +269,7 @@ export default function StaffDashboard() {
         const last = data.lastTokenIssued || 0;
         const skippedArr = Array.isArray(data.skipped) ? data.skipped.slice() : [];
 
-        // find next candidate numeric that's NOT skipped
+        // find next numeric candidate not in skipped
         let candidate = cur + 1;
         while (skippedArr.includes(candidate) && candidate <= last) candidate++;
         if (candidate <= last) {
@@ -293,7 +286,6 @@ export default function StaffDashboard() {
     }
   }
 
-  // Re-announce current
   async function callAgain() {
     if (loadingAction) return;
     setLoadingAction("callAgain");
@@ -314,7 +306,6 @@ export default function StaffDashboard() {
     }
   }
 
-  // Skip a token: add token to skipped[]; if skipping current, move current to next NON-skipped numeric or clear to 0
   async function skipToken() {
     if (loadingAction) return;
     setLoadingAction("skipToken");
@@ -336,14 +327,13 @@ export default function StaffDashboard() {
         }
         tx.update(ref, { skipped });
 
-        // If skipping the current token, advance to next non-skipped numeric
+        // if skipping current token advance to next non-skipped numeric or clear
         if (tok === currentToken) {
           let candidate = currentToken + 1;
           while (skipped.includes(candidate) && candidate <= lastTokenIssued) candidate++;
           if (candidate <= lastTokenIssued) {
             tx.update(ref, { currentToken: candidate, lastCalled: candidate, lastCalledAt: serverTimestamp(), lastPrev: currentToken });
           } else {
-            // no candidate: clear current token so UI doesn't show skipped as current
             tx.update(ref, { currentToken: 0, lastPrev: currentToken, lastCalled: currentToken, lastCalledAt: serverTimestamp() });
           }
         }
@@ -356,7 +346,6 @@ export default function StaffDashboard() {
     }
   }
 
-  // Serve a skipped token (explicit)
   async function serveSkipped(tok) {
     if (loadingAction) return;
     setLoadingAction("serveSkipped");
@@ -380,7 +369,6 @@ export default function StaffDashboard() {
     }
   }
 
-  // Undo last (uses lastPrev in tokens doc)
   async function undoLast() {
     if (loadingAction) return;
     setLoadingAction("undo");
@@ -401,13 +389,11 @@ export default function StaffDashboard() {
     }
   }
 
-  // Start new session (creates tokens/session_x and sets activeSession)
   async function startNewSession() {
     if (loadingAction) return;
     setLoadingAction("startSession");
     try {
       await loadSessions();
-      // compute next session number
       let max = 0;
       sessions.forEach((s) => {
         const n = Number((s || "").split(" ")[1]) || 0;
@@ -433,11 +419,7 @@ export default function StaffDashboard() {
     }
   }
 
-  /* ------------- Orders: approve / markPaid / update / delete ------------- */
-
-  // Approve: assign token. Option A behavior:
-  // - If order.paid === true at approval time -> set status: "paid" (send to kitchen)
-  // - Else set status: "approved" and token assigned (remains in DB, but staff still sees only pending orders)
+  /* -------- Orders: approve / markPaid / update / delete -------- */
   async function approveOrder(orderId) {
     if (loadingAction) return;
     setLoadingAction("approve");
@@ -454,17 +436,15 @@ export default function StaffDashboard() {
         let last = tokenSnap.exists() ? tokenSnap.data().lastTokenIssued || 0 : 0;
         const next = last + 1;
 
-        // update token doc: bump lastTokenIssued (merge existing skipped/current)
         tx.update(tokenRef, { lastTokenIssued: next });
 
-        // If already paid -> directly mark as paid (send to kitchen), else mark approved
+        // If already paid -> immediately mark paid so it goes to kitchen
         if (order.paid) {
           tx.update(orderRef, { token: next, status: "paid", approvedAt: serverTimestamp(), paidAt: order.paidAt || serverTimestamp(), session_id: selectedSession || session });
         } else {
           tx.update(orderRef, { token: next, status: "approved", approvedAt: serverTimestamp(), session_id: selectedSession || session });
         }
       });
-      // close modal if open
       setModalOrder(null);
     } catch (err) {
       alert("Approve failed: " + (err.message || err));
@@ -474,8 +454,6 @@ export default function StaffDashboard() {
     }
   }
 
-  // Mark paid: if order.status === "approved" -> status = "paid" (send to kitchen)
-  // else just set paid: true so later approval detects it
   async function markPaid(orderId) {
     if (loadingAction) return;
     setLoadingAction("markPaid");
@@ -487,13 +465,11 @@ export default function StaffDashboard() {
         const data = snap.data();
         const alreadyApproved = data.status === "approved";
         if (alreadyApproved) {
-          // approved -> convert to paid and set paidAt
           tx.update(orderRef, { paid: true, paidAt: serverTimestamp(), status: "paid" });
         } else {
           tx.update(orderRef, { paid: true, paidAt: serverTimestamp() });
         }
       });
-      // refresh UI and close modal
       setModalOrder(null);
     } catch (err) {
       alert("Mark paid failed: " + (err.message || err));
@@ -510,7 +486,6 @@ export default function StaffDashboard() {
       const phone = prompt("Phone:", order.phone || "");
       if (phone == null) return;
       await updateDoc(doc(db, "orders", order.id), { customerName: name, phone });
-      // refresh (listener will update)
     } catch (err) {
       console.error("updateOrder", err);
       alert("Update failed");
@@ -528,8 +503,6 @@ export default function StaffDashboard() {
     }
   }
 
-  /* ---------------- Helpers ---------------- */
-
   function formatItems(items = []) {
     return (items || []).map((i) => `${i.quantity}×${i.name}`).join(", ");
   }
@@ -545,31 +518,22 @@ export default function StaffDashboard() {
     }
   }
 
-  /* --------------- Render --------------- */
   return (
     <div style={{ ...base.page }}>
-      <div style={{ ...base.container, position: "relative" }}>
-        {/* logout top-right */}
-        <div style={{ position: "absolute", right: 16, top: 12 }}>
-          <button onClick={logout} style={{ ...base.btn, background: "#333", color: "#ffd166" }}>
+      <div style={{ ...base.container }}>
+        {/* logout top-right + kitchen link */}
+        <div style={{ position: "absolute", right: 16, top: 12, display: "flex", gap: 8 }}>
+          <button
+            onClick={() => navigate("/kitchen")}
+            style={{ background: "#444", color: "#ffd166", padding: "8px 12px", fontWeight: 800, borderRadius: 8 }}
+          >
+            Kitchen
+          </button>
+
+          <button onClick={logout} style={{ ...base.btn, background: "#333", color: "#ffd166", borderRadius: 8 }}>
             Logout
           </button>
         </div>
-
-        <button
-  onClick={() => navigate("/kitchen")}
-  style={{
-    background: "#444",
-    color: "#ffd166",
-    padding: "10px 14px",
-    fontWeight: 800,
-    borderRadius: 8,
-    marginRight: 10
-  }}
->
-  Kitchen
-</button>
-
 
         {/* header */}
         <div style={base.headerRow}>
@@ -605,14 +569,10 @@ export default function StaffDashboard() {
                   <select
                     style={base.sessionSelect}
                     value={selectedSession}
-                    onChange={(e) => {
-                      setSelectedSession(e.target.value);
-                    }}
+                    onChange={(e) => setSelectedSession(e.target.value)}
                   >
                     {sessions.map((s) => (
-                      <option key={s} value={s}>
-                        {s}
-                      </option>
+                      <option key={s} value={s}>{s}</option>
                     ))}
                   </select>
                 </div>
@@ -625,13 +585,7 @@ export default function StaffDashboard() {
               <div style={{ marginTop: 8 }}>
                 {skipped && skipped.length ? (
                   skipped.map((t) => (
-                    <span
-                      key={t}
-                      style={base.skippedChip}
-                      onClick={() => {
-                        if (window.confirm(`Serve skipped token ${t} now?`)) serveSkipped(t);
-                      }}
-                    >
+                    <span key={t} style={base.skippedChip} onClick={() => { if (window.confirm(`Serve skipped token ${t} now?`)) serveSkipped(t); }}>
                       {t}
                     </span>
                   ))
@@ -643,40 +597,23 @@ export default function StaffDashboard() {
 
             {/* actions */}
             <div style={base.actionsRow}>
-              <button
-                onClick={callNext}
-                disabled={!!loadingAction}
-                style={{
-                  ...base.btn,
-                  ...base.callBtn,
-                  opacity: loadingAction === "callNext" ? 0.6 : 1
-                }}
-              >
+              <button onClick={callNext} disabled={!!loadingAction} style={{ ...base.btn, ...base.callBtn, opacity: loadingAction === "callNext" ? 0.6 : 1 }}>
                 {loadingAction === "callNext" ? "Processing..." : "Call Next"}
               </button>
 
-              <button
-                onClick={callAgain}
-                disabled={!!loadingAction}
-                style={{ ...base.btn, ...base.callAgainBtn, opacity: loadingAction === "callAgain" ? 0.6 : 1 }}
-              >
+              <button onClick={callAgain} disabled={!!loadingAction} style={{ ...base.btn, ...base.callAgainBtn, opacity: loadingAction === "callAgain" ? 0.6 : 1 }}>
                 {loadingAction === "callAgain" ? "Calling..." : "Call Again"}
               </button>
 
-              <button
-                onClick={skipToken}
-                disabled={!!loadingAction}
-                style={{ ...base.btn, ...base.skipBtn, opacity: loadingAction === "skipToken" ? 0.6 : 1 }}
-              >
+              <button onClick={skipToken} disabled={!!loadingAction} style={{ ...base.btn, ...base.skipBtn, opacity: loadingAction === "skipToken" ? 0.6 : 1 }}>
                 {loadingAction === "skipToken" ? "Skipping..." : "Skip Token"}
               </button>
             </div>
 
             {/* secondary row */}
             <div style={{ marginTop: 8 }}>
-              <button onClick={() => fetchOrdersManual(selectedSession || session)} style={{ ...base.btn, ...base.refreshBtn }}>
-                Refresh Orders
-              </button>
+              <button onClick={() => fetchOrdersManual(selectedSession || session)} style={{ ...base.btn, ...base.refreshBtn }}>Refresh Orders</button>
+
               <button onClick={startNewSession} disabled={!!loadingAction} style={{ ...base.btn, marginLeft: 8, background: "#ffd166", color: "#111", opacity: loadingAction === "startSession" ? 0.6 : 1 }}>
                 {loadingAction === "startSession" ? "Starting..." : "Start New Session"}
               </button>
@@ -707,14 +644,7 @@ export default function StaffDashboard() {
             <div style={{ marginTop: 14 }}>
               <div style={base.smallMuted}>Quick actions</div>
               <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
-                <button
-                  onClick={() => {
-                    if (!skipped.length) return alert("No skipped tokens");
-                    const tok = Number(prompt("Enter token to serve:", skipped[0]));
-                    if (tok) serveSkipped(tok);
-                  }}
-                  style={{ ...base.btn, background: "#2ecc71", color: "#01110b", flex: 1 }}
-                >
+                <button onClick={() => { if (!skipped.length) return alert("No skipped tokens"); const tok = Number(prompt("Enter token to serve:", skipped[0])); if (tok) serveSkipped(tok); }} style={{ ...base.btn, background: "#2ecc71", color: "#01110b", flex: 1 }}>
                   Serve Skipped
                 </button>
 
@@ -726,7 +656,7 @@ export default function StaffDashboard() {
           </div>
         </div>
 
-        {/* pending orders list (staff only sees 'pending') */}
+        {/* pending orders list */}
         <div style={base.approveSection}>
           <h3>Pending Orders (Session: {selectedSession || session})</h3>
 
@@ -734,14 +664,7 @@ export default function StaffDashboard() {
           {!loading && orders.length === 0 && <div style={{ color: "#6b6b6b" }}>No pending orders</div>}
 
           {orders.map((order) => (
-            <div
-              key={order.id}
-              style={base.orderCard}
-              onClick={() => {
-                // open popup with full details
-                setModalOrder(order);
-              }}
-            >
+            <div key={order.id} style={base.orderCard} onClick={() => setModalOrder(order)}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
                 <div style={{ maxWidth: "70%" }}>
                   <div style={{ fontWeight: 900 }}>{order.customerName || "Unknown"}</div>
@@ -757,36 +680,17 @@ export default function StaffDashboard() {
                   <div style={{ marginTop: 8, color: order.paid ? "#2ecc71" : "#ffb86b", fontWeight: 800 }}>{order.paid ? "PAID" : "UNPAID"}</div>
                 </div>
               </div>
+
               <div style={base.orderActions}>
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    approveOrder(order.id);
-                  }}
-                  disabled={!!loadingAction}
-                  style={{ ...base.btn, ...base.approveBtn }}
-                >
+                <button onClick={(e) => { e.stopPropagation(); approveOrder(order.id); }} disabled={!!loadingAction} style={{ ...base.btn, ...base.approveBtn }}>
                   {loadingAction === "approve" ? "Approving..." : "Approve"}
                 </button>
 
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    updateOrder(order);
-                  }}
-                  style={{ ...base.btn, ...base.updateBtn }}
-                >
+                <button onClick={(e) => { e.stopPropagation(); updateOrder(order); }} style={{ ...base.btn, ...base.updateBtn }}>
                   Update
                 </button>
 
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    if (!window.confirm("Delete this order?")) return;
-                    deleteOrder(order.id);
-                  }}
-                  style={{ ...base.btn, ...base.deleteBtn }}
-                >
+                <button onClick={(e) => { e.stopPropagation(); if (!window.confirm("Delete this order?")) return; deleteOrder(order.id); }} style={{ ...base.btn, ...base.deleteBtn }}>
                   Delete
                 </button>
               </div>
@@ -794,7 +698,7 @@ export default function StaffDashboard() {
           ))}
         </div>
 
-        {/* Modal / popup for order details */}
+        {/* Modal / popup */}
         {modalOrder && (
           <div style={base.modalBackdrop} onClick={() => setModalOrder(null)}>
             <div style={base.modal} onClick={(e) => e.stopPropagation()}>
@@ -833,45 +737,19 @@ export default function StaffDashboard() {
               </div>
 
               <div style={{ display: "flex", gap: 8, marginTop: 14, flexWrap: "wrap" }}>
-                <button
-                  onClick={() => {
-                    // Approve from modal: uses same flow as approveOrder
-                    approveOrder(modalOrder.id);
-                  }}
-                  disabled={!!loadingAction}
-                  style={{ ...base.btn, ...base.approveBtn }}
-                >
+                <button onClick={() => approveOrder(modalOrder.id)} disabled={!!loadingAction} style={{ ...base.btn, ...base.approveBtn }}>
                   {loadingAction === "approve" ? "Approving..." : modalOrder.paid ? "Approve & Send to Kitchen" : "Approve (awaiting payment)"}
                 </button>
 
-                <button
-                  onClick={() => {
-                    // Mark paid
-                    if (!window.confirm("Mark this order as PAID?")) return;
-                    markPaid(modalOrder.id);
-                  }}
-                  disabled={!!loadingAction || modalOrder.paid}
-                  style={{ ...base.btn, ...base.callAgainBtn }}
-                >
+                <button onClick={() => { if (!window.confirm("Mark this order as PAID?")) return; markPaid(modalOrder.id); }} disabled={!!loadingAction || modalOrder.paid} style={{ ...base.btn, ...base.callAgainBtn }}>
                   {loadingAction === "markPaid" ? "Marking..." : (modalOrder.paid ? "Already Paid" : "Mark Paid")}
                 </button>
 
-                <button
-                  onClick={() => {
-                    updateOrder(modalOrder);
-                  }}
-                  style={{ ...base.btn, ...base.updateBtn }}
-                >
+                <button onClick={() => updateOrder(modalOrder)} style={{ ...base.btn, ...base.updateBtn }}>
                   Update
                 </button>
 
-                <button
-                  onClick={() => {
-                    if (!window.confirm("Delete this order?")) return;
-                    deleteOrder(modalOrder.id);
-                  }}
-                  style={{ ...base.btn, ...base.deleteBtn }}
-                >
+                <button onClick={() => { if (!window.confirm("Delete this order?")) return; deleteOrder(modalOrder.id); }} style={{ ...base.btn, ...base.deleteBtn }}>
                   Delete
                 </button>
 
