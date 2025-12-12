@@ -3,6 +3,7 @@ import { Route, Switch } from "wouter";
 
 import StaffDashboard from "./pages/staff.jsx";
 import ApprovedOrders from "./pages/approved.jsx";
+import CompletedOrders from "./pages/Completed.jsx"; // ⬅ added
 import StaffLogin from "./pages/StaffLogin";
 import Kitchen from "./pages/Kitchen";
 
@@ -24,14 +25,20 @@ export default function App() {
         <ApprovedOrders />
       </Route>
 
+      {/* Completed orders page */}
+      <Route path="/completed">
+        <CompletedOrders /> 
+      </Route>
+
+      {/* Kitchen page */}
+      <Route path="/kitchen">
+        <Kitchen />
+      </Route>
+
       {/* Default route → redirect to login */}
       <Route path="/">
         <StaffLogin />
       </Route>
-
-      <Route path="/kitchen">
-  <Kitchen />
-</Route>
 
       {/* 404 fallback */}
       <Route>
