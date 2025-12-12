@@ -372,47 +372,102 @@ export default function StaffDashboard() {
     });
   }
 
+  // async function skipToken() {
+  //   const tok = Number(prompt("Enter token to skip:", current));
+  //   if (!tok) return;
+
+  //   const ref = doc(db, "tokens", "session_" + selectedSession);
+
+  //   await runTransaction(db, async (tx) => {
+  //     const snap = await tx.get(ref);
+  //     if (!snap.exists()) return;
+
+  //     let { skipped, currentToken, lastTokenIssued } = snap.data();
+  //     skipped = skipped || [];
+
+  //     if (!skipped.includes(tok)) skipped.push(tok);
+  //     skipped.sort((a, b) => a - b);
+
+  //     tx.update(ref, { skipped });
+
+  //     if (tok === currentToken) {
+  //       const remain = skipped.filter((x) => x !== tok);
+  //       if (remain.length > 0) {
+  //         const next = Math.min(...remain);
+  //         const newSkipped = skipped.filter((x) => x !== next && x !== tok);
+  //         tx.update(ref, {
+  //           currentToken: next,
+  //           skipped: newSkipped,
+  //           lastCalled: next,
+  //           lastCalledAt: serverTimestamp(),
+  //           lastPrev: currentToken
+  //         });
+  //       } else if (currentToken + 1 <= lastTokenIssued) {
+  //         tx.update(ref, {
+  //           currentToken: currentToken + 1,
+  //           lastCalled: currentToken + 1,
+  //           lastCalledAt: serverTimestamp(),
+  //           lastPrev: currentToken
+  //         });
+  //       }
+  //     }
+  //   });
+  // }
+
+
   async function skipToken() {
-    const tok = Number(prompt("Enter token to skip:", current));
-    if (!tok) return;
+  const tok = Number(prompt("Enter token to skip:", current));
+  if (!tok) return;
 
-    const ref = doc(db, "tokens", "session_" + selectedSession);
+  const ref = doc(db, "tokens", "session_" + selectedSession);
 
-    await runTransaction(db, async (tx) => {
-      const snap = await tx.get(ref);
-      if (!snap.exists()) return;
+  await runTransaction(db, async (tx) => {
+    const snap = await tx.get(ref);
+    if (!snap.exists()) return;
 
-      let { skipped, currentToken, lastTokenIssued } = snap.data();
-      skipped = skipped || [];
+    let { skipped = [], currentToken, lastTokenIssued } = snap.data();
 
-      if (!skipped.includes(tok)) skipped.push(tok);
+    // --- ALWAYS add the skipped token ---
+    if (!skipped.includes(tok)) {
+      skipped.push(tok);
       skipped.sort((a, b) => a - b);
+    }
 
-      tx.update(ref, { skipped });
+    // Save updated skipped list
+    tx.update(ref, { skipped });
 
-      if (tok === currentToken) {
-        const remain = skipped.filter((x) => x !== tok);
-        if (remain.length > 0) {
-          const next = Math.min(...remain);
-          const newSkipped = skipped.filter((x) => x !== next && x !== tok);
-          tx.update(ref, {
-            currentToken: next,
-            skipped: newSkipped,
-            lastCalled: next,
-            lastCalledAt: serverTimestamp(),
-            lastPrev: currentToken
-          });
-        } else if (currentToken + 1 <= lastTokenIssued) {
-          tx.update(ref, {
-            currentToken: currentToken + 1,
-            lastCalled: currentToken + 1,
-            lastCalledAt: serverTimestamp(),
-            lastPrev: currentToken
-          });
-        }
+    // If the skipped token is NOT the current token → do nothing else
+    if (tok !== currentToken) return;
+
+    // --- If the CURRENT TOKEN is being skipped: move to the next serveable token ---
+    const remaining = skipped.filter((x) => x !== currentToken);
+
+    if (remaining.length > 0) {
+      // Serve the smallest skipped token
+      const next = remaining[0];
+
+      tx.update(ref, {
+        currentToken: next,
+        lastPrev: currentToken,
+        lastCalled: next,
+        lastCalledAt: serverTimestamp()
+      });
+
+    } else {
+      // No other skipped tokens → go to next sequential token
+      const next = currentToken + 1;
+
+      if (next <= lastTokenIssued) {
+        tx.update(ref, {
+          currentToken: next,
+          lastPrev: currentToken,
+          lastCalled: next,
+          lastCalledAt: serverTimestamp()
+        });
       }
-    });
-  }
+    }
+  });
+}
 
   async function undoLast() {
     const ref = doc(db, "tokens", "session_" + selectedSession);
