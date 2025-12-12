@@ -549,35 +549,41 @@ export default function StaffDashboard() {
             <div style={{ fontWeight: 800 }}>{session}</div>
           </div>
         </div>
+<div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
 
-        {/* top panels */}
-        <div style={{ ...base.topPanel, gridTemplateColumns: isMobile ? "1fr" : base.topPanel.gridTemplateColumns }}>
-          {/* left: live card */}
-          <div style={base.liveCard}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-              <div>
-                <div style={base.smallMuted}>Now Serving</div>
-                <div style={base.bigToken}>{current || "-"}</div>
-              </div>
+  {/* CLICKABLE CURRENT TOKEN */}
+  <div
+    onClick={() => {
+      if (!current) return;
+      const found = orders.find(o => o.token === current);
+      if (found) setModalOrder(found);
+    }}
+    style={{ cursor: "pointer" }}
+  >
+    <div style={base.smallMuted}>Now Serving</div>
+    <div style={base.bigToken}>{current || "-"}</div>
+  </div>
 
-              <div style={{ textAlign: "right" }}>
-                <div style={base.smallMuted}>Last Issued</div>
-                <div style={{ fontWeight: 900, fontSize: 20, color: "#ffd166" }}>{lastIssued || 0}</div>
+  {/* RIGHT SIDE (UNCHANGED) */}
+  <div style={{ textAlign: "right" }}>
+    <div style={base.smallMuted}>Last Issued</div>
+    <div style={{ fontWeight: 900, fontSize: 20, color: "#ffd166" }}>{lastIssued || 0}</div>
 
-                <div style={{ marginTop: 8 }}>
-                  <div style={base.smallMuted}>Session</div>
-                  <select
-                    style={base.sessionSelect}
-                    value={selectedSession}
-                    onChange={(e) => setSelectedSession(e.target.value)}
-                  >
-                    {sessions.map((s) => (
-                      <option key={s} value={s}>{s}</option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-            </div>
+    <div style={{ marginTop: 8 }}>
+      <div style={base.smallMuted}>Session</div>
+      <select
+        style={base.sessionSelect}
+        value={selectedSession}
+        onChange={(e) => setSelectedSession(e.target.value)}
+      >
+        {sessions.map((s) => (
+          <option key={s} value={s}>{s}</option>
+        ))}
+      </select>
+    </div>
+  </div>
+
+</div>
 
             {/* skipped */}
             <div style={{ marginTop: 12 }}>
