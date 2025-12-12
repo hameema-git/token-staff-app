@@ -1,53 +1,99 @@
 import React, { useEffect, useState } from "react";
 import { db } from "../firebaseInit";
-import { collection, query, where, orderBy, getDocs } from "firebase/firestore";
+import {
+  collection,
+  query,
+  where,
+  orderBy,
+  getDocs
+} from "firebase/firestore";
 
-const ui = {
+const styles = {
   page: {
     background: "#0b0b0b",
     color: "#f6e8c1",
     minHeight: "100vh",
     padding: 16,
-    fontFamily: "'Segoe UI', Arial, sans-serif",
+    fontFamily: "'Segoe UI', Roboto, Arial, sans-serif"
   },
   container: {
-    maxWidth: 850,
-    margin: "auto",
+    maxWidth: 900,
+    margin: "auto"
   },
-  title: { fontSize: 24, fontWeight: 900, color: "#ffd166" },
-  muted: { color: "#bfb39a", fontSize: 13 },
+
+  header: {
+    marginBottom: 16
+  },
+  title: {
+    fontSize: 22,
+    fontWeight: 900,
+    color: "#ffd166"
+  },
+  subtitle: {
+    fontSize: 13,
+    color: "#bfb39a"
+  },
+
+  sessionBox: {
+    marginTop: 14
+  },
   sessionSelect: {
     width: "100%",
     padding: 10,
-    marginTop: 6,
-    background: "#111",
-    color: "#ffd166",
     borderRadius: 8,
-    border: "1px solid #333",
-    fontSize: 16,
+    background: "#111",
+    border: "1px solid #222",
+    color: "#ffd166",
+    fontSize: 15
   },
+
   card: {
     background: "#111",
     padding: 14,
     borderRadius: 12,
     borderLeft: "6px solid #2ecc71",
-    marginBottom: 12,
+    marginBottom: 12
   },
   token: {
-    fontSize: 22,
+    fontSize: 20,
     fontWeight: 900,
-    color: "#2ecc71",
+    color: "#2ecc71"
   },
-  items: { marginTop: 6, color: "#eee" },
-  footer: { marginTop: 8, color: "#bfb39a", fontSize: 13 },
+  customer: {
+    marginTop: 6,
+    fontWeight: 800
+  },
+  phone: {
+    fontSize: 13,
+    color: "#bfb39a"
+  },
+  items: {
+    marginTop: 8,
+    color: "#eee"
+  },
+  amount: {
+    marginTop: 8,
+    fontWeight: 800,
+    color: "#ffd166"
+  },
+  footer: {
+    marginTop: 6,
+    fontSize: 12,
+    color: "#999"
+  },
+  empty: {
+    marginTop: 30,
+    textAlign: "center",
+    color: "#777"
+  }
 };
 
 export default function Completed() {
-  const [orders, setOrders] = useState([]);
   const [sessions, setSessions] = useState([]);
   const [selectedSession, setSelectedSession] = useState("");
+  const [orders, setOrders] = useState([]);
 
-  /* ---------------- Load Sessions ---------------- */
+  /* ---------------- LOAD SESSIONS ---------------- */
   useEffect(() => {
     async function loadSessions() {
       const snap = await getDocs(collection(db, "tokens"));
@@ -57,18 +103,20 @@ export default function Completed() {
 
       setSessions(list);
 
-      // Pick latest session
-      const last = list[list.length - 1];
-      setSelectedSession(last);
+      // auto-pick latest session
+      if (list.length) {
+        setSelectedSession(list[list.length - 1]);
+      }
     }
+
     loadSessions();
   }, []);
 
-  /* ---------------- Load Completed Orders ---------------- */
+  /* ---------------- LOAD COMPLETED ORDERS ---------------- */
   useEffect(() => {
     if (!selectedSession) return;
 
-    async function loadOrders() {
+    async function loadCompleted() {
       const q = query(
         collection(db, "orders"),
         where("session_id", "==", selectedSession),
@@ -81,7 +129,6 @@ export default function Completed() {
       const list = snap.docs.map((d) => {
         const data = d.data();
 
-        // Normalize items array
         let items = [];
         if (Array.isArray(data.items)) items = data.items;
         else if (data.items && typeof data.items === "object")
@@ -93,70 +140,73 @@ export default function Completed() {
       setOrders(list);
     }
 
-    loadOrders();
+    loadCompleted();
   }, [selectedSession]);
 
   function formatTime(ts) {
     try {
-      return ts?.toDate().toLocaleString() || "-";
+      return ts?.toDate().toLocaleString();
     } catch {
       return "-";
     }
   }
 
   return (
-    <div style={ui.page}>
-      <div style={ui.container}>
-        <h1 style={ui.title}>Completed Orders</h1>
-        <div style={ui.muted}>Served & finalized orders</div>
+    <div style={styles.page}>
+      <div style={styles.container}>
 
-        {/* Session Dropdown */}
-        <div style={{ marginTop: 16 }}>
-          <div style={ui.muted}>Select Session</div>
+        {/* HEADER */}
+        <div style={styles.header}>
+          <div style={styles.title}>Completed Orders</div>
+          <div style={styles.subtitle}>
+            Finished & delivered orders (read-only)
+          </div>
+        </div>
+
+        {/* SESSION SELECT */}
+        <div style={styles.sessionBox}>
+          <div style={styles.subtitle}>Session</div>
           <select
-            style={ui.sessionSelect}
+            style={styles.sessionSelect}
             value={selectedSession}
             onChange={(e) => setSelectedSession(e.target.value)}
           >
             {sessions.map((s) => (
-              <option key={s} value={s}>
-                {s}
-              </option>
+              <option key={s} value={s}>{s}</option>
             ))}
           </select>
         </div>
 
-        {/* Orders */}
-        <div style={{ marginTop: 20 }}>
+        {/* LIST */}
+        <div style={{ marginTop: 18 }}>
           {orders.length === 0 && (
-            <div style={{ color: "#777", textAlign: "center", marginTop: 20 }}>
-              No completed orders in this session.
+            <div style={styles.empty}>
+              No completed orders in this session
             </div>
           )}
 
           {orders.map((o) => (
-            <div key={o.id} style={ui.card}>
-              <div style={ui.token}>Token #{o.token}</div>
+            <div key={o.id} style={styles.card}>
+              <div style={styles.token}>Token #{o.token}</div>
 
-              <div style={{ fontWeight: 800, marginTop: 6 }}>
-                {o.customerName}
-              </div>
-              <div style={ui.muted}>{o.phone}</div>
+              <div style={styles.customer}>{o.customerName}</div>
+              <div style={styles.phone}>{o.phone}</div>
 
-              <div style={ui.items}>
+              <div style={styles.items}>
                 {o.items?.map((i) => `${i.quantity}×${i.name}`).join(", ")}
               </div>
 
-              <div style={{ marginTop: 6, color: "#ffd166", fontWeight: 700 }}>
+              <div style={styles.amount}>
                 Amount: ₹{Number(o.total || 0).toFixed(2)}
               </div>
 
-              <div style={ui.footer}>
-                Completed At: {formatTime(o.completedAt)}
+              <div style={styles.footer}>
+                Completed at: {formatTime(o.completedAt)}
               </div>
             </div>
           ))}
         </div>
+
       </div>
     </div>
   );

@@ -18,19 +18,32 @@ import {
 const styles = {
   page: { background: "#0b0b0b", color: "#f6e8c1", minHeight: "100vh", padding: 16 },
   container: { maxWidth: 1100, margin: "auto" },
-  headerRow: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 },
+
+  headerRow: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 16
+  },
 
   title: { fontSize: 24, fontWeight: 900, color: "#ffd166" },
   subtitle: { fontSize: 13, color: "#bfb39a" },
 
-  sessionSelect: { padding: 8, borderRadius: 8, background: "#0f0f0f", border: "1px solid #222", color: "#fff" },
+  sessionSelect: {
+    padding: 8,
+    borderRadius: 8,
+    background: "#0f0f0f",
+    border: "1px solid #222",
+    color: "#fff"
+  },
 
   card: {
     background: "#111",
     padding: 16,
     borderRadius: 12,
     borderLeft: "6px solid #ffd166",
-    marginBottom: 12
+    marginBottom: 12,
+    transition: "0.2s"
   },
 
   btn: {
@@ -48,45 +61,43 @@ const styles = {
 
 export default function Kitchen() {
   const [, navigate] = useLocation();
+
   const [staffName, setStaffName] = useState("");
 
-  // sessions
   const [sessions, setSessions] = useState([]);
   const [selectedSession, setSelectedSession] = useState("");
 
-  // paid / cooking orders
   const [orders, setOrders] = useState([]);
-
-  // Live listener ref
   const unsubRef = useRef(null);
 
   /* -------------------------
-     AUTH CHECK (any staff/kitchen allowed)
+     AUTH
   --------------------------*/
   useEffect(() => {
-    const unsub = onAuthStateChanged(auth, async (user) => {
-      if (!user) {
-        navigate("/staff-login");
-        return;
-      }
-      // No kitchen-role restriction
+    const unsub = onAuthStateChanged(auth, (user) => {
+      if (!user) return navigate("/staff-login");
       setStaffName(user.email || "kitchen");
     });
-
     return () => unsub();
   }, []);
 
   /* -------------------------
      Load Sessions
+     → DEFAULT: latest (Session X)
   --------------------------*/
   async function loadSessions() {
     const snap = await getDocs(collection(db, "tokens"));
+
     const list = snap.docs
       .map((d) => d.id.replace("session_", ""))
       .sort((a, b) => Number(a.split(" ")[1]) - Number(b.split(" ")[1]));
 
     setSessions(list);
-    if (!selectedSession && list.length) setSelectedSession(list[0]);
+
+    if (!selectedSession && list.length) {
+      const latest = list[list.length - 1]; // pick latest session
+      setSelectedSession(latest);
+    }
   }
 
   useEffect(() => {
@@ -94,12 +105,12 @@ export default function Kitchen() {
   }, []);
 
   /* -------------------------
-     Subscribe to paid & cooking orders
+     Subscribe to PAID + COOKING orders
   --------------------------*/
   useEffect(() => {
     if (!selectedSession) return;
 
-    if (unsubRef.current) unsubRef.current();
+    unsubRef.current && unsubRef.current();
 
     const q = query(
       collection(db, "orders"),
@@ -112,13 +123,12 @@ export default function Kitchen() {
       const list = snap.docs.map((d) => {
         const data = d.data();
 
-        // FIX: items stored as OBJECT in Firestore → convert to ARRAY
-        let items = [];
-        if (Array.isArray(data.items)) {
-          items = data.items;
-        } else if (typeof data.items === "object") {
-          items = Object.values(data.items);
-        }
+        // FIX: items stored as object → convert to array
+        const items = Array.isArray(data.items)
+          ? data.items
+          : typeof data.items === "object"
+          ? Object.values(data.items)
+          : [];
 
         return { id: d.id, ...data, items };
       });
@@ -132,16 +142,15 @@ export default function Kitchen() {
   /* -------------------------
      ACTIONS
   --------------------------*/
-
-  async function markCooking(orderId) {
-    await updateDoc(doc(db, "orders", orderId), {
+  async function markCooking(id) {
+    await updateDoc(doc(db, "orders", id), {
       status: "cooking",
       cookingAt: serverTimestamp()
     });
   }
 
-  async function markCompleted(orderId) {
-    await updateDoc(doc(db, "orders", orderId), {
+  async function markCompleted(id) {
+    await updateDoc(doc(db, "orders", id), {
       status: "completed",
       completedAt: serverTimestamp()
     });
@@ -151,6 +160,11 @@ export default function Kitchen() {
     await signOut(auth);
     navigate("/staff-login");
   }
+
+  /* -------------------------
+     Sort info: highlight lowest 2 tokens
+  --------------------------*/
+  const highlightedTokens = orders.slice(0, 2).map((o) => o.token);
 
   /* -------------------------
      RENDER
@@ -163,13 +177,16 @@ export default function Kitchen() {
         <div style={styles.headerRow}>
           <div>
             <div style={styles.title}>Kitchen Dashboard</div>
-            <div style={styles.subtitle}>View & prepare orders</div>
+            <div style={styles.subtitle}>Prepare the Orders</div>
           </div>
 
           <div style={{ textAlign: "right" }}>
-            <div style={styles.subtitle}>Logged in as:</div>
+            <div style={styles.subtitle}>Logged in:</div>
             <div style={{ color: "#ffd166", fontWeight: 800 }}>{staffName}</div>
-            <button style={{ ...styles.btn, ...styles.logoutBtn, marginTop: 8 }} onClick={logout}>
+            <button
+              style={{ ...styles.btn, ...styles.logoutBtn, marginTop: 8 }}
+              onClick={logout}
+            >
               Logout
             </button>
           </div>
@@ -191,48 +208,62 @@ export default function Kitchen() {
 
         <h3 style={{ marginBottom: 8 }}>Orders to Prepare</h3>
 
-        {orders.length === 0 && <div style={{ color: "#888" }}>No orders yet</div>}
+        {orders.length === 0 && (
+          <div style={{ color: "#888" }}>No orders yet</div>
+        )}
 
-        {orders.map((o) => (
-          <div key={o.id} style={styles.card}>
-            <div style={{ fontSize: 18, fontWeight: 900 }}>
-              Token #{o.token}
+        {orders.map((o) => {
+          const highlight = highlightedTokens.includes(o.token);
+
+          return (
+            <div
+              key={o.id}
+              style={{
+                ...styles.card,
+                borderLeft: highlight
+                  ? "6px solid #2ecc71"
+                  : "6px solid #ffd166",
+                background: highlight ? "#1a1a1a" : "#111"
+              }}
+            >
+              <div style={{ fontSize: 20, fontWeight: 900 }}>
+                Token #{o.token}
+              </div>
+
+              <div style={{ marginTop: 6, color: "#ccc" }}>
+                {o.customerName} — {o.phone}
+              </div>
+
+              <div style={{ marginTop: 8, color: "#eee" }}>
+                {o.items.map((i) => `${i.quantity}×${i.name}`).join(", ")}
+              </div>
+
+              <div style={{ marginTop: 8, color: "#ffd166" }}>
+                Amount: ₹{Number(o.total).toFixed(2)}
+              </div>
+
+              <div style={{ marginTop: 12 }}>
+                {o.status === "paid" && (
+                  <button
+                    onClick={() => markCooking(o.id)}
+                    style={{ ...styles.btn, ...styles.startBtn }}
+                  >
+                    Start Cooking
+                  </button>
+                )}
+
+                {o.status === "cooking" && (
+                  <button
+                    onClick={() => markCompleted(o.id)}
+                    style={{ ...styles.btn, ...styles.finishBtn }}
+                  >
+                    Finish & Deliver
+                  </button>
+                )}
+              </div>
             </div>
-
-            <div style={{ marginTop: 6, color: "#ccc" }}>
-              {o.customerName} — {o.phone}
-            </div>
-
-            <div style={{ marginTop: 8, color: "#eee" }}>
-              {o.items?.map((i) => `${i.quantity}×${i.name}`).join(", ")}
-            </div>
-
-            <div style={{ marginTop: 8, color: "#ffd166" }}>
-              Amount: ₹{Number(o.total).toFixed(2)}
-            </div>
-
-            {/* ACTION BUTTONS */}
-            <div style={{ marginTop: 12 }}>
-              {o.status === "paid" && (
-                <button
-                  onClick={() => markCooking(o.id)}
-                  style={{ ...styles.btn, ...styles.startBtn }}
-                >
-                  Start Cooking
-                </button>
-              )}
-
-              {o.status === "cooking" && (
-                <button
-                  onClick={() => markCompleted(o.id)}
-                  style={{ ...styles.btn, ...styles.finishBtn }}
-                >
-                  Finish & Deliver
-                </button>
-              )}
-            </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );
