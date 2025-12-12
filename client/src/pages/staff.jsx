@@ -548,28 +548,55 @@ export default function StaffDashboard() {
   }
 
   // When clicking the big current token, lookup order (approved/paid) by token
+  // async function openCurrentTokenModal() {
+  //   if (!current) return;
+  //   try {
+  //     // search orders across statuses for this session/token:
+  //     const q = query(
+  //       collection(db, "orders"),
+  //       where("session_id", "==", selectedSession || session),
+  //       where("token", "==", current),
+  //       orderBy("createdAt", "asc")
+  //     );
+  //     const snap = await getDocs(q);
+  //     if (!snap.empty) {
+  //       const docData = snap.docs[0];
+  //       setModalOrder({ id: docData.id, ...docData.data() });
+  //     } else {
+  //       alert("No order found for current token in this session.");
+  //     }
+  //   } catch (err) {
+  //     console.error("openCurrentTokenModal", err);
+  //     alert("Failed to open current token details");
+  //   }
+  // }
+
   async function openCurrentTokenModal() {
-    if (!current) return;
-    try {
-      // search orders across statuses for this session/token:
-      const q = query(
-        collection(db, "orders"),
-        where("session_id", "==", selectedSession || session),
-        where("token", "==", current),
-        orderBy("createdAt", "asc")
-      );
-      const snap = await getDocs(q);
-      if (!snap.empty) {
-        const docData = snap.docs[0];
-        setModalOrder({ id: docData.id, ...docData.data() });
-      } else {
-        alert("No order found for current token in this session.");
-      }
-    } catch (err) {
-      console.error("openCurrentTokenModal", err);
-      alert("Failed to open current token details");
+  if (!current) return;
+
+  try {
+    const q = query(
+      collection(db, "orders"),
+      where("session_id", "==", selectedSession || session),
+      where("token", "==", current)
+    );
+
+    const snap = await getDocs(q);
+
+    if (snap.empty) {
+      // Instead of alert → show soft message or do nothing
+      console.log("No order found for current token");
+      return;
     }
+
+    const docData = snap.docs[0];
+    setModalOrder({ id: docData.id, ...docData.data() });
+
+  } catch (err) {
+    console.error("openCurrentTokenModal", err);
   }
+}
+
 
   // Helpers
   function formatItems(items = []) {
