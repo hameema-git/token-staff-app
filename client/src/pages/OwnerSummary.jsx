@@ -24,7 +24,18 @@ const styles = {
   btnRow: { display: "flex", gap: 12, marginTop: 20, flexWrap: "wrap" },
   btn: { padding: "12px 16px", borderRadius: 10, border: "none", fontWeight: 800, cursor: "pointer" },
   exportBtn: { background: "#ffd166", color: "#111" },
-  deleteBtn: { background: "#551111", color: "#fff" }
+  deleteBtn: { background: "#551111", color: "#fff" },
+  backBtn: {
+  background: "#222",
+  color: "#ffd166",
+  border: "1px solid #333",
+  padding: "8px 14px",
+  borderRadius: 20,
+  fontWeight: 800,
+  cursor: "pointer",
+  marginBottom: 12
+}
+
 };
 
 export default function OwnerSummary() {
@@ -136,6 +147,13 @@ export default function OwnerSummary() {
     <div style={styles.page}>
       <div style={styles.container}>
         <div style={styles.title}>Owner Summary</div>
+
+<button
+  style={styles.backBtn}
+  onClick={() => navigate("/staff")}
+>
+  ← Back to Staff Dashboard
+</button>
 
         <select
           value={session}
