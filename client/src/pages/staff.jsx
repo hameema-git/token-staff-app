@@ -643,7 +643,7 @@ useEffect(() => {
         {/* top bar */}
         <div style={styles.header}>
           <div style={styles.titleCol}>
-            <div style={styles.title}>Waffle Spots</div>
+            <div style={styles.title}>Waffle Lounge</div>
             <div style={styles.subtitle}>Staff — Manage tokens & orders</div>
           </div>
 
