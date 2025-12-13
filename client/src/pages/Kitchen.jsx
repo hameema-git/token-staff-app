@@ -2,6 +2,7 @@
 import React, { useEffect, useState, useRef } from "react";
 import { useLocation } from "wouter";
 import { auth, db } from "../firebaseInit";
+import { useLocation } from "wouter";
 import { signOut, onAuthStateChanged } from "firebase/auth";
 import {
   collection,
@@ -69,6 +70,7 @@ export default function Kitchen() {
 
   const [orders, setOrders] = useState([]);
   const unsubRef = useRef(null);
+  
 
   /* -------------------------
      AUTH
@@ -179,6 +181,13 @@ export default function Kitchen() {
             <div style={styles.title}>Kitchen Dashboard</div>
             <div style={styles.subtitle}>Prepare the Orders</div>
           </div>
+          <button
+  style={styles.backBtn}
+  onClick={() => navigate("/staff")}
+>
+  ← Back to Staff Dashboard
+</button>
+
 
           <div style={{ textAlign: "right" }}>
             <div style={styles.subtitle}>Logged in:</div>

@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { db, serverTimestamp } from "../firebaseInit";
+import { useLocation } from "wouter";
 import {
   collection,
   getDocs,
@@ -133,6 +134,7 @@ export default function ApprovedOrders() {
   const [selectedSession, setSelectedSession] = useState("");
   const [search, setSearch] = useState("");
   const [modalOrder, setModalOrder] = useState(null);
+  const [, navigate] = useLocation();
 
   useEffect(() => {
     async function loadData() {
@@ -196,6 +198,13 @@ export default function ApprovedOrders() {
           <div style={styles.title}>Approved Orders</div>
           <div style={styles.subtitle}>Awaiting payment — unpaid only</div>
         </div>
+        <button
+  style={styles.backBtn}
+  onClick={() => navigate("/staff")}
+>
+  ← Back to Staff Dashboard
+</button>
+
 
         <div style={styles.controls}>
           <div style={styles.subtitle}>Session</div>

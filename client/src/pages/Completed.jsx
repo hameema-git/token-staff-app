@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { db } from "../firebaseInit";
+import { useLocation } from "wouter";
 import {
   collection,
   query,
@@ -92,6 +93,7 @@ export default function Completed() {
   const [sessions, setSessions] = useState([]);
   const [selectedSession, setSelectedSession] = useState("");
   const [orders, setOrders] = useState([]);
+  const [, navigate] = useLocation();
 
   /* ---------------- LOAD SESSIONS ---------------- */
   useEffect(() => {
@@ -162,6 +164,13 @@ export default function Completed() {
             Finished & delivered orders (read-only)
           </div>
         </div>
+        <button
+  style={styles.backBtn}
+  onClick={() => navigate("/staff")}
+>
+  ← Back to Staff Dashboard
+</button>
+
 
         {/* SESSION SELECT */}
         <div style={styles.sessionBox}>
