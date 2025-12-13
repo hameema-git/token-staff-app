@@ -3,7 +3,7 @@ import React, { useEffect, useState, useRef } from "react";
 import { useLocation } from "wouter";
 import { auth, db } from "../firebaseInit";
 
-import { signOut, onAuthStateChanged } from "firebase/auth";
+import { onAuthStateChanged } from "firebase/auth";
 import {
   collection,
   query,
@@ -25,13 +25,13 @@ const styles = {
   },
   container: { maxWidth: 1100, margin: "auto" },
 
-  /* 🔹 HEADER */
+  /* HEADER */
   headerRow: {
     display: "flex",
+    alignItems: "center",
     justifyContent: "space-between",
-    alignItems: "flex-start",
-    marginBottom: 16,
     gap: 12,
+    marginBottom: 16,
     flexWrap: "wrap"
   },
 
@@ -42,10 +42,11 @@ const styles = {
     background: "#222",
     color: "#ffd166",
     border: "1px solid #333",
-    padding: "8px 14px",
-    borderRadius: 20,
+    padding: "10px 18px",
+    borderRadius: 22,
     fontWeight: 800,
-    cursor: "pointer"
+    cursor: "pointer",
+    whiteSpace: "nowrap"
   },
 
   sessionSelect: {
@@ -65,7 +66,7 @@ const styles = {
   },
 
   btn: {
-    padding: "10px 12px",
+    padding: "10px 14px",
     borderRadius: 8,
     border: "none",
     cursor: "pointer",
@@ -73,8 +74,7 @@ const styles = {
   },
 
   startBtn: { background: "#ffb86b", color: "#111", marginRight: 8 },
-  finishBtn: { background: "#2ecc71", color: "#01110b", marginRight: 8 },
-  logoutBtn: { background: "#333", color: "#ffd166" }
+  finishBtn: { background: "#2ecc71", color: "#01110b" }
 };
 
 export default function Kitchen() {
@@ -87,27 +87,25 @@ export default function Kitchen() {
 
   const unsubRef = useRef(null);
 
-  /* ---------------- AUTH ---------------- */
+  /* AUTH CHECK (NO LOGOUT BUTTON) */
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, (user) => {
-      if (!user) return navigate("/staff-login");
-      setStaffName(user.email || "kitchen");
+      if (!user) navigate("/staff-login");
+      else setStaffName(user.email || "kitchen");
     });
     return () => unsub();
   }, [navigate]);
 
-  /* ---------------- LOAD SESSIONS ---------------- */
+  /* LOAD SESSIONS */
   async function loadSessions() {
     const snap = await getDocs(collection(db, "tokens"));
-
     const list = snap.docs
       .map((d) => d.id.replace("session_", ""))
       .sort((a, b) => Number(a.split(" ")[1]) - Number(b.split(" ")[1]));
 
     setSessions(list);
-
     if (!selectedSession && list.length) {
-      setSelectedSession(list[list.length - 1]); // latest
+      setSelectedSession(list[list.length - 1]);
     }
   }
 
@@ -115,7 +113,7 @@ export default function Kitchen() {
     loadSessions();
   }, []);
 
-  /* ---------------- SUBSCRIBE ORDERS ---------------- */
+  /* SUBSCRIBE ORDERS */
   useEffect(() => {
     if (!selectedSession) return;
 
@@ -133,10 +131,7 @@ export default function Kitchen() {
         const data = d.data();
         const items = Array.isArray(data.items)
           ? data.items
-          : typeof data.items === "object"
-          ? Object.values(data.items)
-          : [];
-
+          : Object.values(data.items || {});
         return { id: d.id, ...data, items };
       });
 
@@ -146,7 +141,7 @@ export default function Kitchen() {
     return () => unsubRef.current && unsubRef.current();
   }, [selectedSession]);
 
-  /* ---------------- ACTIONS ---------------- */
+  /* ACTIONS */
   async function markCooking(id) {
     await updateDoc(doc(db, "orders", id), {
       status: "cooking",
@@ -161,55 +156,26 @@ export default function Kitchen() {
     });
   }
 
-  async function logout() {
-    await signOut(auth);
-    navigate("/staff-login");
-  }
-
   const highlightedTokens = orders.slice(0, 2).map((o) => o.token);
 
-  /* ---------------- RENDER ---------------- */
   return (
     <div style={styles.page}>
       <div style={styles.container}>
 
         {/* HEADER */}
         <div style={styles.headerRow}>
-          {/* LEFT */}
-          <div style={{ flex: "1 1 220px" }}>
+          <div>
             <div style={styles.title}>Kitchen Dashboard</div>
             <div style={styles.subtitle}>Prepare the Orders</div>
           </div>
 
-          {/* CENTER - BACK */}
-          <div style={{ flex: "1 1 100%", textAlign: "center" }}>
-            <button
-              style={{ ...styles.backBtn, width: "100%" }}
-              onClick={() => navigate("/staff")}
-            >
-              ← Back to Staff Dashboard
-            </button>
-          </div>
-
-          {/* RIGHT */}
-          <div style={{ flex: "1 1 220px", textAlign: "right" }}>
-            <div style={styles.subtitle}>Logged in:</div>
-            <div style={{ color: "#ffd166", fontWeight: 800 }}>
-              {staffName}
-            </div>
-
-            <button
-              style={{
-                ...styles.btn,
-                ...styles.logoutBtn,
-                marginTop: 8,
-                width: "100%"
-              }}
-              onClick={logout}
-            >
-              Logout
-            </button>
-          </div>
+          {/* BACK BUTTON — ALWAYS VISIBLE */}
+          <button
+            style={styles.backBtn}
+            onClick={() => navigate("/staff")}
+          >
+            ← Back to Staff Dashboard
+          </button>
         </div>
 
         {/* SESSION SELECT */}
