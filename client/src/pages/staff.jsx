@@ -775,6 +775,12 @@ useEffect(() => {
       <div style={{ color: "#bfb39a", marginBottom: 6 }}>Navigate</div>
       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
         <button
+  style={{ ...styles.btn, background: "#2ecc71", color: "#01110b", marginBottom: 10 }}
+  onClick={() => navigate("/staff-place-order")}
+>
+  + Place Order (Staff)
+</button>
+        <button
           style={{ ...styles.btn, background: "#333", color: "#ffd166" }}
           onClick={() => { setDrawerOpen(false); navigate("/approved"); }}
         >

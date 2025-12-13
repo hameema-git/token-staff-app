@@ -7,6 +7,7 @@ import CompletedOrders from "./pages/Completed.jsx";
 import PaymentCenter from "./pages/PaymentCenter.jsx";
 import StaffLogin from "./pages/StaffLogin";
 import Kitchen from "./pages/Kitchen";
+import StaffPlaceOrder from "./pages/StaffPlaceOrder";
 
 // ✅ NEW OWNER SUMMARY PAGE
 import OwnerSummary from "./pages/OwnerSummary.jsx";
@@ -48,6 +49,9 @@ export default function App() {
       <Route path="/kitchen">
         <Kitchen />
       </Route>
+      <Route path="/staff-place-order">
+  <StaffPlaceOrder />
+</Route>
 
       {/* Default → Login */}
       <Route path="/">
