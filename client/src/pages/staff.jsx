@@ -758,39 +758,93 @@ useEffect(() => {
           ))}
         </div>
 
-        {/* Drawer / menu */}
-        {drawerOpen && (
-          <div style={styles.drawer} role="dialog" aria-modal="true">
-            <button style={styles.drawerClose} onClick={() => setDrawerOpen(false)}>✕</button>
-            <h3 style={{ color: "#ffd166", marginTop: 8 }}>Menu</h3>
+     {/* Drawer / menu */}
+{drawerOpen && (
+  <div style={styles.drawer} role="dialog" aria-modal="true">
+    <button
+      style={styles.drawerClose}
+      onClick={() => setDrawerOpen(false)}
+    >
+      ✕
+    </button>
 
-            <div style={{ marginTop: 10 }}>
-              <div style={{ color: "#bfb39a", marginBottom: 6 }}>Sessions</div>
-              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                {sessions.map((s) => (
-                  <button key={s} style={{ ...styles.btn, background: selectedSession === s ? "#ffd166" : "#222", color: selectedSession === s ? "#111" : "#ffd166", textAlign: "left" }} onClick={() => handleSelectSession(s)}>
-                    {s}
-                  </button>
-                ))}
-                <button style={{ ...styles.btn, background: "#444", color: "#ffd166", marginTop: 6 }} onClick={() => { startNewSession(); setDrawerOpen(false); }}>Start New Session</button>
-              </div>
-            </div>
+    <h3 style={{ color: "#ffd166", marginTop: 8 }}>Menu</h3>
 
-            <div style={{ marginTop: 16 }}>
-              <div style={{ color: "#bfb39a", marginBottom: 6 }}>Navigate</div>
-              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                <button style={{ ...styles.btn, background: "#333", color: "#ffd166" }} onClick={() => { setDrawerOpen(false); navigate("/approved"); }}>Approved Orders</button>
-                <button style={{ ...styles.btn, background: "#333", color: "#ffd166" }} onClick={() => { setDrawerOpen(false); navigate("/completed"); }}>Completed Orders</button>
-                <button style={{ ...styles.btn, background: "#333", color: "#ffd166" }} onClick={() => { setDrawerOpen(false); navigate("/kitchen"); }}>Kitchen</button>
-              </div>
-            </div>
+    {/* NAVIGATION */}
+    <div style={{ marginTop: 16 }}>
+      <div style={{ color: "#bfb39a", marginBottom: 6 }}>Navigate</div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+        <button
+          style={{ ...styles.btn, background: "#333", color: "#ffd166" }}
+          onClick={() => { setDrawerOpen(false); navigate("/approved"); }}
+        >
+          Approved Orders
+        </button>
 
-            <div style={{ marginTop: 16 }}>
-              <div style={{ color: "#bfb39a", marginBottom: 6 }}>Danger</div>
-              <button style={{ ...styles.btn, background: "#551111", color: "#fff" }} onClick={() => { if (!window.confirm("Reset skipped tokens for this session?")) return; (async () => { try { await updateDoc(doc(db, "tokens", "session_" + (selectedSession || session)), { skipped: [] }); alert("Skipped cleared"); } catch (err) { alert("Failed"); console.error(err); } })(); }}>Clear Skipped</button>
-            </div>
-          </div>
-        )}
+        <button
+          style={{ ...styles.btn, background: "#333", color: "#ffd166" }}
+          onClick={() => { setDrawerOpen(false); navigate("/completed"); }}
+        >
+          Completed Orders
+        </button>
+
+        <button
+          style={{ ...styles.btn, background: "#333", color: "#ffd166" }}
+          onClick={() => { setDrawerOpen(false); navigate("/kitchen"); }}
+        >
+          Kitchen
+        </button>
+      </div>
+    </div>
+
+    {/* DANGER ZONE — BOTTOM */}
+    <div style={{ marginTop: 24 }}>
+      <div style={{ color: "#bfb39a", marginBottom: 6 }}>Danger</div>
+
+      <button
+        style={{
+          ...styles.btn,
+          background: "#551111",
+          color: "#fff",
+          marginBottom: 8
+        }}
+        onClick={() => {
+          if (!window.confirm("Reset skipped tokens for this session?")) return;
+          (async () => {
+            try {
+              await updateDoc(
+                doc(db, "tokens", "session_" + (selectedSession || session)),
+                { skipped: [] }
+              );
+              alert("Skipped cleared");
+            } catch (err) {
+              alert("Failed");
+              console.error(err);
+            }
+          })();
+        }}
+      >
+        Clear Skipped
+      </button>
+
+      {/* 🔥 START NEW SESSION — VERY BOTTOM */}
+      <button
+        style={{
+          ...styles.btn,
+          background: "#551111",
+          color: "#fff"
+        }}
+        onClick={() => {
+          if (!window.confirm("Start a NEW session?")) return;
+          startNewSession();
+          setDrawerOpen(false);
+        }}
+      >
+        Start New Session
+      </button>
+    </div>
+  </div>
+)}
 
         {/* Modal popup for order details */}
         {modalOrder && (
