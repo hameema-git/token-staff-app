@@ -2,7 +2,7 @@
 import React, { useEffect, useState, useRef } from "react";
 import { useLocation } from "wouter";
 import { auth, db } from "../firebaseInit";
-import { useLocation } from "wouter";
+
 import { signOut, onAuthStateChanged } from "firebase/auth";
 import {
   collection,
