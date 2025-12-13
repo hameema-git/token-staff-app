@@ -175,6 +175,31 @@ export default function StaffDashboard() {
       setSelectedSession((prev) => prev || "Session 1");
     }
   }
+  // 🔒 Prevent showing COMPLETED tokens in "Now Serving"
+useEffect(() => {
+  if (!current || !selectedSession) return;
+
+  async function validateCurrentToken() {
+    const q = query(
+      collection(db, "orders"),
+      where("session_id", "==", selectedSession),
+      where("token", "==", current)
+    );
+
+    const snap = await getDocs(q);
+
+    // ❌ No order OR already completed → invalid token
+    if (
+      snap.empty ||
+      snap.docs[0].data().status === "completed"
+    ) {
+      callNext(); // auto-skip safely
+    }
+  }
+
+  validateCurrentToken();
+}, [current, selectedSession]);
+
 
   useEffect(() => {
     loadSessions();
