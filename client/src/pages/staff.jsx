@@ -221,7 +221,7 @@ export default function StaffDashboard() {
         navigate("/kitchen");
       }}
     >
-      Kitchen
+      KitchenSSSSSS
     </button>
 
     {/* ✅ OWNER SUMMARY */}
