@@ -124,7 +124,17 @@ const styles = {
     fontWeight: 800,
     cursor: "pointer",
     width: "100%"
-  }
+  },
+  backBtn: {
+  background: "#222",
+  color: "#ffd166",
+  border: "1px solid #333",
+  padding: "8px 14px",
+  borderRadius: 20,
+  fontWeight: 800,
+  cursor: "pointer",
+  marginBottom: 12
+}
 };
 
 export default function ApprovedOrders() {

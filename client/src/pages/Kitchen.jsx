@@ -54,6 +54,16 @@ const styles = {
     cursor: "pointer",
     fontWeight: 800
   },
+    backBtn: {
+  background: "#222",
+  color: "#ffd166",
+  border: "1px solid #333",
+  padding: "8px 14px",
+  borderRadius: 20,
+  fontWeight: 800,
+  cursor: "pointer",
+  marginBottom: 12
+},
 
   startBtn: { background: "#ffb86b", color: "#111", marginRight: 8 },
   finishBtn: { background: "#2ecc71", color: "#01110b", marginRight: 8 },

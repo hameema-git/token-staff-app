@@ -86,7 +86,17 @@ const styles = {
     marginTop: 30,
     textAlign: "center",
     color: "#777"
-  }
+  },
+    backBtn: {
+  background: "#222",
+  color: "#ffd166",
+  border: "1px solid #333",
+  padding: "8px 14px",
+  borderRadius: 20,
+  fontWeight: 800,
+  cursor: "pointer",
+  marginBottom: 12
+}
 };
 
 export default function Completed() {
