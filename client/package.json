@@ -10,7 +10,6 @@
   },
   "dependencies": {
     "firebase": "^10.0.0",
-    "jspdf": "^3.0.4",
     "nanoid": "^4.0.0",
     "react": "^19.2.1",
     "react-dom": "^19.2.1",
