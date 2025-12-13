@@ -8,7 +8,7 @@ import {
   getDoc,
   runTransaction
 } from "firebase/firestore";
-import Footer from "../components/Footer";
+
 
 /* ---------------- MENU (SAME AS HOME) ---------------- */
 const MENU = [
@@ -152,7 +152,7 @@ export default function StaffPlaceOrder() {
         </div>
       )}
 
-      <Footer />
+     
     </div>
   );
 }
