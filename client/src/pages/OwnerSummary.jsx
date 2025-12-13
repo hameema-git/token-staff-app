@@ -1,5 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { db } from "../firebaseInit";
+import { useLocation } from "wouter";
+
 import {
   collection,
   query,
@@ -43,6 +45,7 @@ export default function OwnerSummary() {
   const [sessions, setSessions] = useState([]);
   const [itemsSummary, setItemsSummary] = useState({});
   const [stats, setStats] = useState(null);
+  const [, navigate] = useLocation();
 
   /* ---------------- LOAD SESSIONS ---------------- */
   useEffect(() => {
