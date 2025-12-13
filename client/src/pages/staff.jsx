@@ -792,7 +792,13 @@ useEffect(() => {
           style={{ ...styles.btn, background: "#333", color: "#ffd166" }}
           onClick={() => { setDrawerOpen(false); navigate("/kitchen"); }}
         >
-          KitchenSSS
+          Kitchen
+        </button>
+          <button
+          style={{ ...styles.btn, background: "#333", color: "#ffd166" }}
+          onClick={() => { setDrawerOpen(false); navigate("/owner-summary"); }}
+        >
+          Summary
         </button>
       </div>
     </div>
