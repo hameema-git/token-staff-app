@@ -4,9 +4,12 @@ import { Route, Switch } from "wouter";
 import StaffDashboard from "./pages/staff.jsx";
 import ApprovedOrders from "./pages/approved.jsx";
 import CompletedOrders from "./pages/Completed.jsx";
-import PaymentCenter from "./pages/PaymentCenter.jsx";   // ⬅ NEW
+import PaymentCenter from "./pages/PaymentCenter.jsx";
 import StaffLogin from "./pages/StaffLogin";
 import Kitchen from "./pages/Kitchen";
+
+// ✅ NEW OWNER SUMMARY PAGE
+import OwnerSummary from "./pages/OwnerSummary.jsx";
 
 export default function App() {
   return (
@@ -19,6 +22,11 @@ export default function App() {
       {/* Staff Dashboard */}
       <Route path="/staff">
         <StaffDashboard />
+      </Route>
+
+      {/* Owner Summary (Shop Owner Only) */}
+      <Route path="/owner-summary">
+        <OwnerSummary />
       </Route>
 
       {/* Approved Orders */}
@@ -48,7 +56,9 @@ export default function App() {
 
       {/* 404 */}
       <Route>
-        <div style={{ color: "white", padding: 20 }}>404 - Not Found</div>
+        <div style={{ color: "white", padding: 20 }}>
+          404 - Not Found
+        </div>
       </Route>
     </Switch>
   );
