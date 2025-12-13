@@ -181,46 +181,78 @@ export default function StaffDashboard() {
           </div>
         ))}
 
-        {/* DRAWER */}
-        {drawerOpen && (
-          <div style={styles.drawer}>
-            <button style={styles.drawerClose} onClick={() => setDrawerOpen(false)}>✕</button>
+   {/* DRAWER */}
+{drawerOpen && (
+  <div style={styles.drawer} role="dialog" aria-modal="true">
+    <button
+      style={styles.drawerClose}
+      onClick={() => setDrawerOpen(false)}
+    >
+      ✕
+    </button>
 
-            <h3 style={{ color: "#ffd166" }}>Menu</h3>
+    <h3 style={{ color: "#ffd166" }}>Menu</h3>
 
-            <button style={{ ...styles.btn, background: "#333", color: "#ffd166" }}
-              onClick={() => { setDrawerOpen(false); navigate("/approved"); }}>
-              Approved Orders
-            </button>
+    {/* NAVIGATION */}
+    <button
+      style={{ ...styles.btn, background: "#333", color: "#ffd166" }}
+      onClick={() => {
+        setDrawerOpen(false);
+        navigate("/approved");
+      }}
+    >
+      Approved Orders
+    </button>
 
-            <button style={{ ...styles.btn, background: "#333", color: "#ffd166", marginTop: 8 }}
-              onClick={() => { setDrawerOpen(false); navigate("/completed"); }}>
-              Completed Orders
-            </button>
+    <button
+      style={{ ...styles.btn, background: "#333", color: "#ffd166", marginTop: 8 }}
+      onClick={() => {
+        setDrawerOpen(false);
+        navigate("/completed");
+      }}
+    >
+      Completed Orders
+    </button>
 
-            <button style={{ ...styles.btn, background: "#333", color: "#ffd166", marginTop: 8 }}
-              onClick={() => { setDrawerOpen(false); navigate("/kitchen"); }}>
-              Kitchen
-            </button>
+    <button
+      style={{ ...styles.btn, background: "#333", color: "#ffd166", marginTop: 8 }}
+      onClick={() => {
+        setDrawerOpen(false);
+        navigate("/kitchen");
+      }}
+    >
+      Kitchen
+    </button>
 
-            {/* ✅ OWNER SUMMARY — NOW ALWAYS VISIBLE */}
-            <button
-              style={{ ...styles.btn, background: "#333", color: "#ffd166", marginTop: 8 }}
-              onClick={() => { setDrawerOpen(false); navigate("/owner-summary"); }}
-            >
-              Owner Summary
-            </button>
+    {/* ✅ OWNER SUMMARY */}
+    <button
+      style={{ ...styles.btn, background: "#333", color: "#ffd166", marginTop: 8 }}
+      onClick={() => {
+        setDrawerOpen(false);
+        navigate("/owner-summary");
+      }}
+    >
+      📊 Owner Summary
+    </button>
 
-            <div style={{ marginTop: 20 }}>
-              <button
-                style={{ ...styles.btn, background: "#551111", color: "#fff" }}
-                onClick={loadSessions}
-              >
-                Start New Session
-              </button>
-            </div>
-          </div>
-        )}
+    {/* DANGER ZONE */}
+    <div style={{ marginTop: 24 }}>
+      <div style={{ color: "#bfb39a", marginBottom: 6 }}>Danger</div>
+
+      <button
+        style={{ ...styles.btn, background: "#551111", color: "#fff" }}
+        onClick={() => {
+          if (!window.confirm("Start a NEW session?")) return;
+          startNewSession();
+          setDrawerOpen(false);
+        }}
+      >
+        Start New Session
+      </button>
+    </div>
+  </div>
+)}
+
 
         {/* MODAL */}
         {modalOrder && (
