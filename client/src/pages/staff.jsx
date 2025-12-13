@@ -64,7 +64,7 @@ const styles = {
   modalBackdrop: { position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 9999 },
   modal: { background: "#0f0f0f", padding: 16, borderRadius: 10, width: "min(720px, 96%)", color: "#f6e8c1" },
   menuButton: { background: "transparent", color: "#ffd166", border: "none", fontSize: 20, padding: 8 },
-  drawer: { position: "fixed", top: 0, left: 0, height: "100%", width: 260, background: "#0f0f0f", boxShadow: "2px 0 10px rgba(0,0,0,0.6)", zIndex: 10000, padding: 14 },
+  drawer: { position: "fixed", top: 0, left: 0, height: "100%", width: 260, background: "#0f0f0f", boxShadow: "2px 0 10px rgba(0,0,0,0.6)", zIndex: 10000, padding: 14 , overflowY: "auto" },
   drawerClose: { position: "absolute", right: 10, top: 8, background: "transparent", border: "none", color: "#ffd166", fontSize: 18 }
 };
 
@@ -794,12 +794,13 @@ useEffect(() => {
         >
           Kitchen
         </button>
-         <button
-          style={{ ...styles.btn, background: "#333", color: "#ffd166" }}
-          onClick={() => { setDrawerOpen(false); navigate("/owner-summary"); }}
-        >
-          Kitchen
-        </button>
+        <button
+  style={{ ...styles.btn, background: "#333", color: "#ffd166" }}
+  onClick={() => { setDrawerOpen(false); navigate("/owner-summary"); }}
+>
+  Owner Summary
+</button>
+
       </div>
     </div>
 
