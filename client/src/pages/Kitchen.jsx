@@ -17,18 +17,36 @@ import {
 } from "firebase/firestore";
 
 const styles = {
-  page: { background: "#0b0b0b", color: "#f6e8c1", minHeight: "100vh", padding: 16 },
+  page: {
+    background: "#0b0b0b",
+    color: "#f6e8c1",
+    minHeight: "100vh",
+    padding: 16
+  },
   container: { maxWidth: 1100, margin: "auto" },
 
+  /* 🔹 HEADER */
   headerRow: {
     display: "flex",
     justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 16
+    alignItems: "flex-start",
+    marginBottom: 16,
+    gap: 12,
+    flexWrap: "wrap"
   },
 
   title: { fontSize: 24, fontWeight: 900, color: "#ffd166" },
   subtitle: { fontSize: 13, color: "#bfb39a" },
+
+  backBtn: {
+    background: "#222",
+    color: "#ffd166",
+    border: "1px solid #333",
+    padding: "8px 14px",
+    borderRadius: 20,
+    fontWeight: 800,
+    cursor: "pointer"
+  },
 
   sessionSelect: {
     padding: 8,
@@ -43,8 +61,7 @@ const styles = {
     padding: 16,
     borderRadius: 12,
     borderLeft: "6px solid #ffd166",
-    marginBottom: 12,
-    transition: "0.2s"
+    marginBottom: 12
   },
 
   btn: {
@@ -54,16 +71,6 @@ const styles = {
     cursor: "pointer",
     fontWeight: 800
   },
-    backBtn: {
-  background: "#222",
-  color: "#ffd166",
-  border: "1px solid #333",
-  padding: "8px 14px",
-  borderRadius: 20,
-  fontWeight: 800,
-  cursor: "pointer",
-  marginBottom: 12
-},
 
   startBtn: { background: "#ffb86b", color: "#111", marginRight: 8 },
   finishBtn: { background: "#2ecc71", color: "#01110b", marginRight: 8 },
@@ -74,29 +81,22 @@ export default function Kitchen() {
   const [, navigate] = useLocation();
 
   const [staffName, setStaffName] = useState("");
-
   const [sessions, setSessions] = useState([]);
   const [selectedSession, setSelectedSession] = useState("");
-
   const [orders, setOrders] = useState([]);
-  const unsubRef = useRef(null);
-  
 
-  /* -------------------------
-     AUTH
-  --------------------------*/
+  const unsubRef = useRef(null);
+
+  /* ---------------- AUTH ---------------- */
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, (user) => {
       if (!user) return navigate("/staff-login");
       setStaffName(user.email || "kitchen");
     });
     return () => unsub();
-  }, []);
+  }, [navigate]);
 
-  /* -------------------------
-     Load Sessions
-     → DEFAULT: latest (Session X)
-  --------------------------*/
+  /* ---------------- LOAD SESSIONS ---------------- */
   async function loadSessions() {
     const snap = await getDocs(collection(db, "tokens"));
 
@@ -107,8 +107,7 @@ export default function Kitchen() {
     setSessions(list);
 
     if (!selectedSession && list.length) {
-      const latest = list[list.length - 1]; // pick latest session
-      setSelectedSession(latest);
+      setSelectedSession(list[list.length - 1]); // latest
     }
   }
 
@@ -116,9 +115,7 @@ export default function Kitchen() {
     loadSessions();
   }, []);
 
-  /* -------------------------
-     Subscribe to PAID + COOKING orders
-  --------------------------*/
+  /* ---------------- SUBSCRIBE ORDERS ---------------- */
   useEffect(() => {
     if (!selectedSession) return;
 
@@ -134,8 +131,6 @@ export default function Kitchen() {
     unsubRef.current = onSnapshot(q, (snap) => {
       const list = snap.docs.map((d) => {
         const data = d.data();
-
-        // FIX: items stored as object → convert to array
         const items = Array.isArray(data.items)
           ? data.items
           : typeof data.items === "object"
@@ -151,9 +146,7 @@ export default function Kitchen() {
     return () => unsubRef.current && unsubRef.current();
   }, [selectedSession]);
 
-  /* -------------------------
-     ACTIONS
-  --------------------------*/
+  /* ---------------- ACTIONS ---------------- */
   async function markCooking(id) {
     await updateDoc(doc(db, "orders", id), {
       status: "cooking",
@@ -173,37 +166,45 @@ export default function Kitchen() {
     navigate("/staff-login");
   }
 
-  /* -------------------------
-     Sort info: highlight lowest 2 tokens
-  --------------------------*/
   const highlightedTokens = orders.slice(0, 2).map((o) => o.token);
 
-  /* -------------------------
-     RENDER
-  --------------------------*/
+  /* ---------------- RENDER ---------------- */
   return (
     <div style={styles.page}>
       <div style={styles.container}>
 
         {/* HEADER */}
         <div style={styles.headerRow}>
-          <div>
+          {/* LEFT */}
+          <div style={{ flex: "1 1 220px" }}>
             <div style={styles.title}>Kitchen Dashboard</div>
             <div style={styles.subtitle}>Prepare the Orders</div>
           </div>
-          <button
-  style={styles.backBtn}
-  onClick={() => navigate("/staff")}
->
-  ← Back to Staff Dashboard
-</button>
 
-
-          <div style={{ textAlign: "right" }}>
-            <div style={styles.subtitle}>Logged in:</div>
-            <div style={{ color: "#ffd166", fontWeight: 800 }}>{staffName}</div>
+          {/* CENTER - BACK */}
+          <div style={{ flex: "1 1 100%", textAlign: "center" }}>
             <button
-              style={{ ...styles.btn, ...styles.logoutBtn, marginTop: 8 }}
+              style={{ ...styles.backBtn, width: "100%" }}
+              onClick={() => navigate("/staff")}
+            >
+              ← Back to Staff Dashboard
+            </button>
+          </div>
+
+          {/* RIGHT */}
+          <div style={{ flex: "1 1 220px", textAlign: "right" }}>
+            <div style={styles.subtitle}>Logged in:</div>
+            <div style={{ color: "#ffd166", fontWeight: 800 }}>
+              {staffName}
+            </div>
+
+            <button
+              style={{
+                ...styles.btn,
+                ...styles.logoutBtn,
+                marginTop: 8,
+                width: "100%"
+              }}
               onClick={logout}
             >
               Logout
