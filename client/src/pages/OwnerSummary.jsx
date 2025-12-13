@@ -1,4 +1,3 @@
-// client/src/pages/OwnerSummary.jsx
 import React, { useEffect, useState } from "react";
 import { db } from "../firebaseInit";
 import {
@@ -9,8 +8,6 @@ import {
   deleteDoc,
   doc
 } from "firebase/firestore";
-import jsPDF from "jspdf";
-import "jspdf-autotable";
 
 const styles = {
   page: { background: "#0b0b0b", color: "#f6e8c1", minHeight: "100vh", padding: 20 },
@@ -26,14 +23,13 @@ const styles = {
   td: { padding: 8, borderBottom: "1px solid #222" },
   btnRow: { display: "flex", gap: 12, marginTop: 20, flexWrap: "wrap" },
   btn: { padding: "12px 16px", borderRadius: 10, border: "none", fontWeight: 800, cursor: "pointer" },
-  pdfBtn: { background: "#ffd166", color: "#111" },
+  exportBtn: { background: "#ffd166", color: "#111" },
   deleteBtn: { background: "#551111", color: "#fff" }
 };
 
 export default function OwnerSummary() {
   const [session, setSession] = useState("");
   const [sessions, setSessions] = useState([]);
-  const [orders, setOrders] = useState([]);
   const [itemsSummary, setItemsSummary] = useState({});
   const [stats, setStats] = useState(null);
 
@@ -62,7 +58,6 @@ export default function OwnerSummary() {
 
       const snap = await getDocs(q);
       const data = snap.docs.map(d => d.data());
-      setOrders(data);
 
       let totalAmount = 0;
       let paidCount = 0;
@@ -76,8 +71,8 @@ export default function OwnerSummary() {
           if (!itemMap[i.name]) {
             itemMap[i.name] = { qty: 0, amount: 0 };
           }
-          itemMap[i.name].qty += i.quantity;
-          itemMap[i.name].amount += i.quantity * i.price;
+          itemMap[i.name].qty += Number(i.quantity || 0);
+          itemMap[i.name].amount += Number(i.quantity || 0) * Number(i.price || 0);
         });
       });
 
@@ -93,34 +88,33 @@ export default function OwnerSummary() {
     loadSummary();
   }, [session]);
 
-  /* ---------------- PDF ---------------- */
-  function downloadPDF() {
-    const doc = new jsPDF();
-    doc.text(`Waffle Lounge - Session Summary`, 14, 14);
-    doc.text(`Session: ${session}`, 14, 22);
+  /* ---------------- EXPORT CSV ---------------- */
+  function exportCSV() {
+    if (!stats) return;
 
-    doc.autoTable({
-      startY: 30,
-      head: [["Metric", "Value"]],
-      body: [
-        ["Total Orders", stats.orders],
-        ["Paid Orders", stats.paid],
-        ["Unpaid Orders", stats.unpaid],
-        ["Total Amount", `₹${stats.totalAmount}`]
-      ]
-    });
-
-    doc.autoTable({
-      startY: doc.lastAutoTable.finalY + 10,
-      head: [["Item", "Quantity Sold", "Revenue"]],
-      body: Object.entries(itemsSummary).map(([name, v]) => [
+    const rows = [
+      ["Metric", "Value"],
+      ["Total Orders", stats.orders],
+      ["Paid Orders", stats.paid],
+      ["Unpaid Orders", stats.unpaid],
+      ["Total Amount", stats.totalAmount],
+      [],
+      ["Item", "Quantity Sold", "Revenue"],
+      ...Object.entries(itemsSummary).map(([name, v]) => [
         name,
         v.qty,
-        `₹${v.amount}`
+        v.amount
       ])
-    });
+    ];
 
-    doc.save(`Session_${session}_Summary.pdf`);
+    const csv = rows.map(r => r.join(",")).join("\n");
+    const blob = new Blob([csv], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `Session_${session}_Summary.csv`;
+    a.click();
   }
 
   /* ---------------- DELETE SESSION ---------------- */
@@ -199,9 +193,10 @@ export default function OwnerSummary() {
             </div>
 
             <div style={styles.btnRow}>
-              <button style={{ ...styles.btn, ...styles.pdfBtn }} onClick={downloadPDF}>
-                Download PDF
+              <button style={{ ...styles.btn, ...styles.exportBtn }} onClick={exportCSV}>
+                Export CSV
               </button>
+
               <button style={{ ...styles.btn, ...styles.deleteBtn }} onClick={deleteSession}>
                 Delete Session
               </button>
