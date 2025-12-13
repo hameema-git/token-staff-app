@@ -7,16 +7,19 @@ import {
   doc
 } from "firebase/firestore";
 
+const isDesktop = window.innerWidth >= 768;
+
 const styles = {
   page: {
     background: "#0b0b0b",
     color: "#f6e8c1",
     minHeight: "100vh",
     padding: 16,
-    fontFamily: "'Segoe UI', Roboto, Arial, sans-serif"
+    fontFamily: "'Segoe UI', Roboto, Arial, sans-serif",
+    overflowX: "hidden"
   },
   container: {
-    maxWidth: 900,
+    maxWidth: 1100,
     margin: "auto"
   },
 
@@ -44,22 +47,50 @@ const styles = {
     color: "#fff"
   },
 
+  /* 🔹 GRID FIX */
+  list: {
+    marginTop: 18,
+    display: "grid",
+    gridTemplateColumns: isDesktop ? "repeat(2, minmax(0, 1fr))" : "1fr",
+    gap: 14
+  },
+
   card: {
     background: "#111",
     padding: 14,
     borderRadius: 12,
     borderLeft: "6px solid #ffd166",
-    marginBottom: 12,
-    cursor: "pointer"
+    cursor: "pointer",
+    display: "flex",
+    flexDirection: "column",
+    gap: 6,
+    minWidth: 0
   },
+
+  tokenRow: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: 10
+  },
+
   token: { fontSize: 18, fontWeight: 900, color: "#ffd166" },
-  name: { marginTop: 6, fontWeight: 800 },
+  unpaid: { color: "#ffb86b", fontWeight: 800, fontSize: 13 },
+
+  name: { fontWeight: 800 },
   phone: { fontSize: 13, color: "#bfb39a" },
-  items: { marginTop: 8, color: "#eee" },
-  amount: { marginTop: 8, fontWeight: 800, color: "#ffd166" },
-  unpaid: { color: "#ffb86b", fontWeight: 800 },
+
+  items: {
+    fontSize: 14,
+    color: "#eee",
+    lineHeight: 1.4,
+    wordBreak: "break-word"
+  },
+
+  amount: { fontWeight: 800, color: "#ffd166", marginTop: 4 },
 
   empty: {
+    gridColumn: "1 / -1",
     marginTop: 30,
     textAlign: "center",
     color: "#777"
@@ -72,15 +103,19 @@ const styles = {
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
-    zIndex: 9999
+    zIndex: 9999,
+    padding: 12
   },
   modal: {
     background: "#0f0f0f",
     padding: 18,
     borderRadius: 12,
-    width: "95%",
-    maxWidth: 480
+    width: "100%",
+    maxWidth: 480,
+    maxHeight: "90vh",
+    overflowY: "auto"
   },
+
   btn: {
     padding: "12px",
     borderRadius: 8,
@@ -99,25 +134,21 @@ export default function ApprovedOrders() {
   const [search, setSearch] = useState("");
   const [modalOrder, setModalOrder] = useState(null);
 
-  /* ---------------- LOAD DATA ---------------- */
   useEffect(() => {
     async function loadData() {
-      // sessions
       const tokenSnap = await getDocs(collection(db, "tokens"));
       const sessionList = tokenSnap.docs
-        .map((d) => d.id.replace("session_", ""))
+        .map(d => d.id.replace("session_", ""))
         .sort((a, b) => Number(a.split(" ")[1]) - Number(b.split(" ")[1]));
 
       const last = sessionList[sessionList.length - 1];
-
       setSessions(sessionList);
       setSelectedSession(last);
 
-      // approved + unpaid only
       const orderSnap = await getDocs(collection(db, "orders"));
       const approved = orderSnap.docs
-        .map((d) => ({ id: d.id, ...d.data() }))
-        .filter((o) => o.status === "approved" && !o.paid);
+        .map(d => ({ id: d.id, ...d.data() }))
+        .filter(o => o.status === "approved" && !o.paid);
 
       setOrders(approved);
       applyFilters(approved, last, "");
@@ -126,14 +157,13 @@ export default function ApprovedOrders() {
     loadData();
   }, []);
 
-  /* ---------------- FILTER ---------------- */
   function applyFilters(list, session, text) {
-    let result = list.filter((o) => o.session_id === session);
+    let result = list.filter(o => o.session_id === session);
 
     if (text.trim()) {
       const t = text.toLowerCase();
       result = result.filter(
-        (o) =>
+        o =>
           (o.customerName || "").toLowerCase().includes(t) ||
           (o.phone || "").includes(t) ||
           String(o.token || "").includes(t)
@@ -154,34 +184,30 @@ export default function ApprovedOrders() {
     });
 
     setModalOrder(null);
-    setOrders((prev) => prev.filter((o) => o.id !== order.id));
-    setFiltered((prev) => prev.filter((o) => o.id !== order.id));
+    setOrders(prev => prev.filter(o => o.id !== order.id));
+    setFiltered(prev => prev.filter(o => o.id !== order.id));
   }
 
   return (
     <div style={styles.page}>
       <div style={styles.container}>
 
-        {/* HEADER */}
         <div style={styles.header}>
           <div style={styles.title}>Approved Orders</div>
-          <div style={styles.subtitle}>
-            Awaiting payment — unpaid only
-          </div>
+          <div style={styles.subtitle}>Awaiting payment — unpaid only</div>
         </div>
 
-        {/* CONTROLS */}
         <div style={styles.controls}>
           <div style={styles.subtitle}>Session</div>
           <select
             style={styles.select}
             value={selectedSession}
-            onChange={(e) => {
+            onChange={e => {
               setSelectedSession(e.target.value);
               applyFilters(orders, e.target.value, search);
             }}
           >
-            {sessions.map((s) => (
+            {sessions.map(s => (
               <option key={s} value={s}>{s}</option>
             ))}
           </select>
@@ -190,52 +216,47 @@ export default function ApprovedOrders() {
             style={styles.search}
             placeholder="Search token / name / phone"
             value={search}
-            onChange={(e) => {
+            onChange={e => {
               setSearch(e.target.value);
               applyFilters(orders, selectedSession, e.target.value);
             }}
           />
         </div>
 
-        {/* LIST */}
-        <div style={{ marginTop: 18 }}>
+        <div style={styles.list}>
           {filtered.length === 0 && (
             <div style={styles.empty}>No unpaid approved orders</div>
           )}
 
-          {filtered.map((o) => (
-            <div
-              key={o.id}
-              style={styles.card}
-              onClick={() => setModalOrder(o)}
-            >
-              <div style={styles.token}>Token #{o.token}</div>
+          {filtered.map(o => (
+            <div key={o.id} style={styles.card} onClick={() => setModalOrder(o)}>
+              <div style={styles.tokenRow}>
+                <div style={styles.token}>Token #{o.token}</div>
+                <div style={styles.unpaid}>UNPAID</div>
+              </div>
+
               <div style={styles.name}>{o.customerName}</div>
               <div style={styles.phone}>{o.phone}</div>
+
               <div style={styles.items}>
-                {o.items?.map((i) => `${i.quantity}×${i.name}`).join(", ")}
+                {o.items?.map(i => `${i.quantity}× ${i.name}`).join(", ")}
               </div>
+
               <div style={styles.amount}>
-                ₹{Number(o.total || 0).toFixed(2)}{" "}
-                <span style={styles.unpaid}>(UNPAID)</span>
+                ₹{Number(o.total || 0).toFixed(2)}
               </div>
             </div>
           ))}
         </div>
 
-        {/* MODAL */}
         {modalOrder && (
           <div style={styles.modalBg} onClick={() => setModalOrder(null)}>
-            <div style={styles.modal} onClick={(e) => e.stopPropagation()}>
-              <h3 style={{ color: "#ffd166" }}>
-                Token #{modalOrder.token}
-              </h3>
+            <div style={styles.modal} onClick={e => e.stopPropagation()}>
+              <h3 style={{ color: "#ffd166" }}>Token #{modalOrder.token}</h3>
 
               <div style={{ marginTop: 8 }}>
                 {modalOrder.items?.map((i, idx) => (
-                  <div key={idx}>
-                    {i.quantity}× {i.name}
-                  </div>
+                  <div key={idx}>{i.quantity}× {i.name}</div>
                 ))}
               </div>
 
