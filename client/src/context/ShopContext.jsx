@@ -17,25 +17,14 @@ export const ShopProvider = ({ children }) => {
         const data = snap.data();
         setShop(data);
 
-        /* ✅ APPLY THEME VARIABLES */
+        // 🎨 APPLY THEME COLORS AS CSS VARIABLES
         const theme = data.theme || {};
 
-        document.documentElement.style.setProperty(
-          "--bg",
-          theme.background || "#0b0b0b"
-        );
-        document.documentElement.style.setProperty(
-          "--primary",
-          theme.primary || "#ffd166"
-        );
-        document.documentElement.style.setProperty(
-          "--text",
-          theme.text || "#f6e8c1"
-        );
-        document.documentElement.style.setProperty(
-          "--secondary",
-          "#111"
-        );
+        const root = document.documentElement;
+        root.style.setProperty("--bg", theme.background || "#0b0b0b");
+        root.style.setProperty("--primary", theme.primary || "#ffd166");
+        root.style.setProperty("--text", theme.text || "#f6e8c1");
+        root.style.setProperty("--secondary", "#111"); // optional
       }
 
       setLoading(false);
