@@ -891,7 +891,7 @@ useEffect(() => {
         >
           Summary
         </button>
-        <button onClick={() => navigate("/menu-manage")}>
+        <button  style={{ ...styles.btn, background: "#333", color: "#ffd166" }} onClick={() => navigate("/menu-manage")}>
   Manage Menu
 </button>
 
