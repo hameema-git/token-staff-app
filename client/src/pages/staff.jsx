@@ -35,7 +35,14 @@ import {
  */
 
 const styles = {
-  page: { background: "#0b0b0b", color: "#f6e8c1", minHeight: "100vh", padding: 14, fontFamily: "'Segoe UI', Roboto, Arial, sans-serif" },
+  // page: { background: "#0b0b0b", color: "#f6e8c1", minHeight: "100vh", padding: 14, fontFamily: "'Segoe UI', Roboto, Arial, sans-serif" },
+  page: {
+  background: "var(--bg)",
+  color: "var(--text)",
+  minHeight: "100vh",
+  padding: 14,
+  fontFamily: "'Segoe UI', Roboto, Arial, sans-serif"
+},
   container: { maxWidth: 900, margin: "auto", position: "relative" },
   header: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 12 },
   titleCol: { display: "flex", flexDirection: "column" },
