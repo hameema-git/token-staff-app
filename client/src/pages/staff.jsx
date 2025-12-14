@@ -98,6 +98,9 @@ export default function StaffDashboard() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(window.innerWidth < 720);
 
+
+  const [shopOpen, setShopOpen] = useState(true);
+  const [shopMessage, setShopMessage] = useState("");
   // responsive
   useEffect(() => {
     const onResize = () => setIsMobile(window.innerWidth < 720);
@@ -174,6 +177,26 @@ export default function StaffDashboard() {
       // fallback
       setSelectedSession((prev) => prev || "Session 1");
     }
+  }
+
+  useEffect(() => {
+    const ref = doc(db, "settings", "shop");
+    return onSnapshot(ref, snap => {
+      if (snap.exists()) {
+        setShopOpen(!!snap.data().isOpen);
+        setShopMessage(snap.data().message || "");
+      }
+    });
+  }, []);
+
+   async function openShop() {
+    await setDoc(doc(db, "settings", "shop"), { isOpen: true, message: "" }, { merge: true });
+  }
+
+  async function closeShop() {
+    const msg = prompt("Closing message", shopMessage || "Shop is closed");
+    if (msg === null) return;
+    await setDoc(doc(db, "settings", "shop"), { isOpen: false, message: msg }, { merge: true });
   }
   // 🔒 Prevent showing COMPLETED tokens in "Now Serving"
 useEffect(() => {
@@ -643,7 +666,7 @@ useEffect(() => {
         {/* top bar */}
         <div style={styles.header}>
           <div style={styles.titleCol}>
-            <div style={styles.title}>Waffle Lounge</div>
+            <div style={styles.title}>Waffle Spot</div>
             <div style={styles.subtitle}>Staff — Manage tokens & orders</div>
           </div>
 
@@ -767,6 +790,31 @@ useEffect(() => {
     >
       ✕
     </button>
+     <h3 style={{ color: "#ffd166" }}>Shop Control</h3>
+     
+      <div
+              style={{
+                padding: 10,
+                borderRadius: 8,
+                background: shopOpen ? "#0f5132" : "#842029",
+                color: "#fff",
+                fontWeight: 900,
+                textAlign: "center",
+                marginBottom: 10
+              }}
+            >
+      {shopOpen ? "SHOP OPEN" : "SHOP CLOSED"}
+            </div>
+
+            {shopOpen ? (
+              <button style={{ ...styles.btn, background: "#ff7a00" }} onClick={closeShop}>
+                Close Shop
+              </button>
+            ) : (
+              <button style={{ ...styles.btn, background: "#2ecc71" }} onClick={openShop}>
+                Open Shop
+              </button>
+            )}
 
     <h3 style={{ color: "#ffd166", marginTop: 8 }}>Menu</h3>
 
