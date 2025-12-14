@@ -1,5 +1,7 @@
 import React from "react";
 import { Route, Switch } from "wouter";
+import { useShop } from "./context/ShopContext";
+import useApplyTheme from "./hooks/useApplyTheme";
 
 import StaffDashboard from "./pages/staff.jsx";
 import ApprovedOrders from "./pages/approved.jsx";
@@ -9,65 +11,56 @@ import StaffLogin from "./pages/StaffLogin";
 import Kitchen from "./pages/Kitchen";
 import StaffPlaceOrder from "./pages/StaffPlaceOrder";
 import MenuManage from "./pages/MenuManage";
-
-
-
-// ✅ NEW OWNER SUMMARY PAGE
 import OwnerSummary from "./pages/OwnerSummary.jsx";
 
 export default function App() {
+  const { shop } = useShop();
+
+  // 🔥 THIS LINE MAKES FIREBASE COLORS WORK
+  useApplyTheme(shop?.theme);
+
   return (
     <Switch>
-      {/* Login */}
       <Route path="/staff-login">
         <StaffLogin />
       </Route>
 
-      {/* Staff Dashboard */}
       <Route path="/staff">
         <StaffDashboard />
       </Route>
 
-      {/* Owner Summary (Shop Owner Only) */}
       <Route path="/owner-summary">
         <OwnerSummary />
       </Route>
 
-      {/* Approved Orders */}
       <Route path="/approved">
         <ApprovedOrders />
       </Route>
 
-      {/* Completed Orders */}
       <Route path="/completed">
         <CompletedOrders />
       </Route>
 
-      {/* Payment Center */}
       <Route path="/payment">
         <PaymentCenter />
       </Route>
 
-      {/* Kitchen */}
       <Route path="/kitchen">
         <Kitchen />
       </Route>
+
       <Route path="/staff-place-order">
-  <StaffPlaceOrder />
-</Route>
+        <StaffPlaceOrder />
+      </Route>
 
-<Route path="/menu-manage">
-  <MenuManage />
-</Route>
+      <Route path="/menu-manage">
+        <MenuManage />
+      </Route>
 
-
-
-      {/* Default → Login */}
       <Route path="/">
         <StaffLogin />
       </Route>
 
-      {/* 404 */}
       <Route>
         <div style={{ color: "white", padding: 20 }}>
           404 - Not Found

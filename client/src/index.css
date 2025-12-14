@@ -1,0 +1,14 @@
+:root {
+  /* 🔹 Fallback values (used before Firestore loads) */
+  --bg: #0b0b0b;
+  --text: #f6e8c1;
+  --primary: #ffd166;
+  --secondary: #111111;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Segoe UI', Roboto, Arial, sans-serif;
+}

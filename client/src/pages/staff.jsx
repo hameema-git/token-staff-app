@@ -46,35 +46,43 @@ const styles = {
   container: { maxWidth: 900, margin: "auto", position: "relative" },
   header: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 12 },
   titleCol: { display: "flex", flexDirection: "column" },
-  title: { fontSize: 20, fontWeight: 900, color: "#ffd166" },
+  title: { fontSize: 20, fontWeight: 900, color:"var(--primary)" },
   subtitle: { color: "#bfb39a", fontSize: 12 },
   userCol: { textAlign: "right", fontSize: 12 },
-  liveCard: { background: "#111", padding: 14, borderRadius: 12, borderLeft: "6px solid #ffd166", marginBottom: 12 },
+  liveCard: { background: "var(--secondary)"
+, padding: 14, borderRadius: 12, borderLeft: "6px solid #ffd166", marginBottom: 12 },
   nowServingWrap: { display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 },
   nowServingClickable: { cursor: "pointer" },
   nowServingLabel: { color: "#bfb39a", fontSize: 12 },
-  bigToken: { fontSize: 56, fontWeight: 900, color: "#ffd166", letterSpacing: 2, textAlign: "center" },
+  bigToken: { fontSize: 56, fontWeight: 900, color: "var(--primary)", letterSpacing: 2, textAlign: "center" },
   smallMuted: { color: "#bfb39a", fontSize: 12 },
   actionsRow: { display: "flex", gap: 8, marginTop: 12, flexWrap: "wrap" },
   btn: { padding: "12px 14px", borderRadius: 10, border: "none", cursor: "pointer", fontWeight: 800, fontSize: 14 },
-  callBtn: { background: "#ffd166", color: "#111", flex: 1 },
-  callAgainBtn: { background: "#444", color: "#ffd166", minWidth: 110 },
-  skipBtn: { background: "#ff7a00", color: "#111", minWidth: 110 },
+  callBtn: { background: "var(--primary)", color:"var(--secondary)"
+, flex: 1 },
+  callAgainBtn: { background: "#444", color: "var(--primary)", minWidth: 110 },
+  skipBtn: { background: "#ff7a00", color: "var(--secondary)"
+, minWidth: 110 },
   smallBtn: { padding: "8px 10px", borderRadius: 8, fontSize: 13 },
-  sessionSelect: { padding: 10, borderRadius: 8, background: "#0f0f0f", border: "1px solid #222", color: "#fff", width: "100%" },
+  sessionSelect: { padding: 10, borderRadius: 8, background: "var(--secondary)"
+, border: "1px solid #222", color: "#fff", width: "100%" },
   pendingList: { marginTop: 6 },
-  orderCard: { background: "#111", padding: 12, borderRadius: 10, marginBottom: 10, display: "flex", justifyContent: "space-between", gap: 10, alignItems: "flex-start" },
+  orderCard: { background: "var(--secondary)"
+, padding: 12, borderRadius: 10, marginBottom: 10, display: "flex", justifyContent: "space-between", gap: 10, alignItems: "flex-start" },
   orderLeft: { maxWidth: "65%" },
   orderRight: { textAlign: "right" },
   orderActions: { display: "flex", gap: 8, marginTop: 8, flexWrap: "wrap" },
   approveBtn: { background: "#2ecc71", color: "#01110b" },
-  updateBtn: { background: "#ffd166", color: "#111" },
+  updateBtn: { background: "var(--primary)", color: "var(--secondary)"
+ },
   deleteBtn: { background: "#ff6b6b", color: "#fff" },
   modalBackdrop: { position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 9999 },
-  modal: { background: "#0f0f0f", padding: 16, borderRadius: 10, width: "min(720px, 96%)", color: "#f6e8c1" },
-  menuButton: { background: "transparent", color: "#ffd166", border: "none", fontSize: 20, padding: 8 },
-  drawer: { position: "fixed", top: 0, left: 0, height: "100%", width: 260, background: "#0f0f0f", boxShadow: "2px 0 10px rgba(0,0,0,0.6)", zIndex: 10000, padding: 14 },
-  drawerClose: { position: "absolute", right: 10, top: 8, background: "transparent", border: "none", color: "#ffd166", fontSize: 18 }
+  modal: { background: "var(--secondary)"
+, padding: 16, borderRadius: 10, width: "min(720px, 96%)", color: "#f6e8c1" },
+  menuButton: { background: "transparent", color: "var(--primary)", border: "none", fontSize: 20, padding: 8 },
+  drawer: { position: "fixed", top: 0, left: 0, height: "100%", width: 260, background: "var(--secondary)"
+, boxShadow: "2px 0 10px rgba(0,0,0,0.6)", zIndex: 10000, padding: 14 },
+  drawerClose: { position: "absolute", right: 10, top: 8, background: "transparent", border: "none", color: "var(--primary)", fontSize: 18 }
 };
 
 export default function StaffDashboard() {
@@ -700,7 +708,11 @@ useEffect(() => {
         {/* top bar */}
         <div style={styles.header}>
           <div style={styles.titleCol}>
-            <div style={styles.title}>Waffle Spot</div>
+            {/* <div style={styles.title}>Waffle Spot</div> */}
+            <div style={styles.title}>
+  {shop?.name || "Loading..."}
+</div>
+
             <div style={styles.subtitle}>Staff — Manage tokens & orders</div>
           </div>
 
@@ -709,7 +721,7 @@ useEffect(() => {
             <div style={{ fontWeight: 800 }}>{isStaff ? staffName : "—"}</div>
             <div style={{ marginTop: 8, display: "flex", gap: 8, justifyContent: "flex-end" }}>
               <button style={styles.menuButton} onClick={() => setDrawerOpen(true)}>☰</button>
-              <button onClick={logout} style={{ ...styles.btn, ...styles.smallBtn, background: "#333", color: "#ffd166" }}>Logout</button>
+              <button onClick={logout} style={{ ...styles.btn, ...styles.smallBtn, background: "#333", color: "var(--primary)" }}>Logout</button>
             </div>
           </div>
         </div>
@@ -728,7 +740,7 @@ useEffect(() => {
 
             <div style={{ width: 120, textAlign: "right" }}>
               <div style={styles.smallMuted}>Last Issued</div>
-              <div style={{ fontSize: 20, fontWeight: 900, color: "#ffd166" }}>{lastIssued || 0}</div>
+              <div style={{ fontSize: 20, fontWeight: 900, color:"var(--primary)" }}>{lastIssued || 0}</div>
 
               <div style={{ marginTop: 10 }}>
                 <div style={styles.smallMuted}>Session</div>
@@ -751,7 +763,7 @@ useEffect(() => {
                     serveSkipped(t);
                   }}
                   className="skipped-chip"
-                  style={{ background: "#222", color: "#ffd166", padding: "6px 10px", borderRadius: 999, border: "none", fontWeight: 800 }}
+                  style={{ background: "#222", color:"var(--primary)", padding: "6px 10px", borderRadius: 999, border: "none", fontWeight: 800 }}
                 >
                   {t}
                 </button>
@@ -775,9 +787,9 @@ useEffect(() => {
           </div>
 
           <div style={{ marginTop: 10, display: "flex", gap: 8 }}>
-            <button onClick={() => fetchOrdersManual(selectedSession || session)} style={{ ...styles.btn, background: "#333", color: "#ffd166" }}>Refresh</button>
+            <button onClick={() => fetchOrdersManual(selectedSession || session)} style={{ ...styles.btn, background: "#333", color: "var(--primary)" }}>Refresh</button>
 
-            <button onClick={undoLast} disabled={!!loadingAction} style={{ ...styles.btn, background: "#222", color: "#ffd166" }}>{loadingAction === "undo" ? "Undoing..." : "Undo"}</button>
+            <button onClick={undoLast} disabled={!!loadingAction} style={{ ...styles.btn, background: "#222", color: "var(--primary)" }}>{loadingAction === "undo" ? "Undoing..." : "Undo"}</button>
           </div>
         </div>
 
@@ -799,7 +811,7 @@ useEffect(() => {
 
               <div style={styles.orderRight}>
                 <div style={{ color: "#bfb39a", fontSize: 12 }}>Status</div>
-                <div style={{ fontWeight: 900, color: "#ffd166" }}>{order.status}</div>
+                <div style={{ fontWeight: 900, color: "var(--primary)" }}>{order.status}</div>
                 {order.token && <div style={{ marginTop: 8 }}>Token: <strong>{order.token}</strong></div>}
                 <div style={{ marginTop: 8, fontWeight: 800, color: order.paid ? "#2ecc71" : "#ffb86b" }}>{order.paid ? "PAID" : "UNPAID"}</div>
 
@@ -824,7 +836,7 @@ useEffect(() => {
     >
       ✕
     </button>
-    <h3 style={{ color: "#ffd166", marginBottom: 10 }}>Shop Control</h3>
+    <h3 style={{ color: "var(--primary)", marginBottom: 10 }}>Shop Control</h3>
 
 {/* Status Row */}
 <div
@@ -833,7 +845,7 @@ useEffect(() => {
     alignItems: "center",
     justifyContent: "space-between",
     padding: "10px 12px",
-    background: "#111",
+    background: "var(--secondary)",
     borderRadius: 10,
     marginBottom: 14,
     border: "1px solid #222"
@@ -901,7 +913,7 @@ useEffect(() => {
 </div>
 
 
-    <h3 style={{ color: "#ffd166", marginTop: 8 }}>Menu</h3>
+    <h3 style={{ color: "var(--primary)", marginTop: 8 }}>Menu</h3>
 
     {/* NAVIGATION */}
     <div style={{ marginTop: 16 }}>
@@ -914,32 +926,32 @@ useEffect(() => {
   + Place Order (Staff)
 </button>
         <button
-          style={{ ...styles.btn, background: "#333", color: "#ffd166" }}
+          style={{ ...styles.btn, background: "#333", color: "var(--primary)" }}
           onClick={() => { setDrawerOpen(false); navigate("/approved"); }}
         >
           Approved Orders
         </button>
 
         <button
-          style={{ ...styles.btn, background: "#333", color: "#ffd166" }}
+          style={{ ...styles.btn, background: "#333", color: "var(--primary)" }}
           onClick={() => { setDrawerOpen(false); navigate("/completed"); }}
         >
           Completed Orders
         </button>
 
         <button
-          style={{ ...styles.btn, background: "#333", color: "#ffd166" }}
+          style={{ ...styles.btn, background: "#333", color: "var(--primary)" }}
           onClick={() => { setDrawerOpen(false); navigate("/kitchen"); }}
         >
           Kitchen
         </button>
           <button
-          style={{ ...styles.btn, background: "#333", color: "#ffd166" }}
+          style={{ ...styles.btn, background: "#333", color:"var(--primary)" }}
           onClick={() => { setDrawerOpen(false); navigate("/owner-summary"); }}
         >
           Summary
         </button>
-        <button  style={{ ...styles.btn, background: "#333", color: "#ffd166" }} onClick={() => navigate("/menu-manage")}>
+        <button  style={{ ...styles.btn, background: "#333", color: "var(--primary)" }} onClick={() => navigate("/menu-manage")}>
   Manage Menu
 </button>
 
@@ -1008,7 +1020,7 @@ useEffect(() => {
 
                 <div style={{ textAlign: "right" }}>
                   <div style={styles.smallMuted}>Status</div>
-                  <div style={{ fontWeight: 900, color: "#ffd166" }}>{modalOrder.status}</div>
+                  <div style={{ fontWeight: 900, color: "var(--primary)" }}>{modalOrder.status}</div>
 
                   <div style={{ marginTop: 8 }}>
                     <div style={styles.smallMuted}>Token</div>
@@ -1017,7 +1029,7 @@ useEffect(() => {
 
                   <div style={{ marginTop: 8 }}>
                     <div style={styles.smallMuted}>Amount</div>
-                    <div style={{ fontWeight: 900, color: "#ffd166" }}>₹{Number(modalOrder.total || 0).toFixed(2)}</div>
+                    <div style={{ fontWeight: 900, color: "var(--primary)" }}>₹{Number(modalOrder.total || 0).toFixed(2)}</div>
                   </div>
 
                   <div style={{ marginTop: 8 }}>
@@ -1048,7 +1060,7 @@ useEffect(() => {
 
                 <div style={{ flex: 1 }} />
 
-                <button onClick={() => setModalOrder(null)} style={{ ...styles.btn, background: "#222", color: "#ffd166" }}>Close</button>
+                <button onClick={() => setModalOrder(null)} style={{ ...styles.btn, background: "#222", color: "var(--primary)" }}>Close</button>
               </div>
             </div>
           </div>
