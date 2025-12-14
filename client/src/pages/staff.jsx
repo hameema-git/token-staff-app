@@ -790,31 +790,68 @@ useEffect(() => {
     >
       ✕
     </button>
-     <h3 style={{ color: "#ffd166" }}>Shop Control</h3>
-     
-      <div
-              style={{
-                padding: 10,
-                borderRadius: 8,
-                background: shopOpen ? "#0f5132" : "#842029",
-                color: "#fff",
-                fontWeight: 900,
-                textAlign: "center",
-                marginBottom: 10
-              }}
-            >
-      {shopOpen ? "SHOP OPEN" : "SHOP CLOSED"}
-            </div>
+    <h3 style={{ color: "#ffd166", marginBottom: 10 }}>Shop Control</h3>
 
-            {shopOpen ? (
-              <button style={{ ...styles.btn, background: "#ff7a00" }} onClick={closeShop}>
-                Close Shop
-              </button>
-            ) : (
-              <button style={{ ...styles.btn, background: "#2ecc71" }} onClick={openShop}>
-                Open Shop
-              </button>
-            )}
+{/* Status Row */}
+<div
+  style={{
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    padding: "10px 12px",
+    background: "#111",
+    borderRadius: 10,
+    marginBottom: 14,
+    border: "1px solid #222"
+  }}
+>
+  <div>
+    <div style={{ fontSize: 13, color: "#bfb39a" }}>Current Status</div>
+    <div
+      style={{
+        fontWeight: 900,
+        color: shopOpen ? "#2ecc71" : "#ff6b6b",
+        marginTop: 2
+      }}
+    >
+      {shopOpen ? "SHOP OPEN" : "SHOP CLOSED"}
+    </div>
+  </div>
+
+  {/* Toggle Switch */}
+  <div
+    onClick={() => {
+      if (shopOpen) {
+        closeShop();
+      } else {
+        openShop();
+      }
+    }}
+    style={{
+      width: 52,
+      height: 28,
+      borderRadius: 999,
+      background: shopOpen ? "#2ecc71" : "#555",
+      position: "relative",
+      cursor: "pointer",
+      transition: "background 0.25s ease"
+    }}
+  >
+    <div
+      style={{
+        width: 22,
+        height: 22,
+        borderRadius: "50%",
+        background: "#0b0b0b",
+        position: "absolute",
+        top: 3,
+        left: shopOpen ? 27 : 3,
+        transition: "left 0.25s ease"
+      }}
+    />
+  </div>
+</div>
+
 
     <h3 style={{ color: "#ffd166", marginTop: 8 }}>Menu</h3>
 
