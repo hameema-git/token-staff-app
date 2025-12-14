@@ -11,6 +11,7 @@ import StaffPlaceOrder from "./pages/StaffPlaceOrder";
 import MenuManage from "./pages/MenuManage";
 
 
+
 // ✅ NEW OWNER SUMMARY PAGE
 import OwnerSummary from "./pages/OwnerSummary.jsx";
 
@@ -58,6 +59,8 @@ export default function App() {
 <Route path="/menu-manage">
   <MenuManage />
 </Route>
+
+
 
       {/* Default → Login */}
       <Route path="/">

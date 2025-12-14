@@ -3,6 +3,8 @@ import React, { useEffect, useState, useRef } from "react";
 import { useLocation } from "wouter";
 import { auth, db, serverTimestamp } from "../firebaseInit";
 import { signOut, onAuthStateChanged, getIdTokenResult } from "firebase/auth";
+import { useShop } from "../context/ShopContext";
+
 import {
   collection,
   query,
@@ -70,6 +72,8 @@ const styles = {
 
 export default function StaffDashboard() {
   const [, navigate] = useLocation();
+  const { shop, loading: shopLoading } = useShop();
+
 
   // auth
   const [isStaff, setIsStaff] = useState(false);
@@ -99,8 +103,8 @@ export default function StaffDashboard() {
   const [isMobile, setIsMobile] = useState(window.innerWidth < 720);
 
 
-  const [shopOpen, setShopOpen] = useState(true);
-  const [shopMessage, setShopMessage] = useState("");
+  // const [shopOpen, setShopOpen] = useState(true);
+  // const [shopMessage, setShopMessage] = useState("");
   // responsive
   useEffect(() => {
     const onResize = () => setIsMobile(window.innerWidth < 720);
@@ -179,25 +183,48 @@ export default function StaffDashboard() {
     }
   }
 
-  useEffect(() => {
-    const ref = doc(db, "settings", "shop");
-    return onSnapshot(ref, snap => {
-      if (snap.exists()) {
-        setShopOpen(!!snap.data().isOpen);
-        setShopMessage(snap.data().message || "");
-      }
-    });
-  }, []);
+  // useEffect(() => {
+  //   const ref = doc(db, "settings", "shop");
+  //   return onSnapshot(ref, snap => {
+  //     if (snap.exists()) {
+  //       setShopOpen(!!snap.data().isOpen);
+  //       setShopMessage(snap.data().message || "");
+  //     }
+  //   });
+  // }, []);
 
-   async function openShop() {
-    await setDoc(doc(db, "settings", "shop"), { isOpen: true, message: "" }, { merge: true });
-  }
+  //  async function openShop() {
+  //   await setDoc(doc(db, "settings", "shop"), { isOpen: true, message: "" }, { merge: true });
+  // }
+  async function openShop() {
+  await setDoc(
+    doc(db, "settings", "shop"),
+    { isOpen: true, message: "" },
+    { merge: true }
+  );
+}
+
+
+  // async function closeShop() {
+  //   const msg = prompt("Closing message", shopMessage || "Shop is closed");
+  //   if (msg === null) return;
+  //   await setDoc(doc(db, "settings", "shop"), { isOpen: false, message: msg }, { merge: true });
+  // }
 
   async function closeShop() {
-    const msg = prompt("Closing message", shopMessage || "Shop is closed");
-    if (msg === null) return;
-    await setDoc(doc(db, "settings", "shop"), { isOpen: false, message: msg }, { merge: true });
-  }
+  const msg = prompt(
+    "Closing message",
+    shop?.message || "Shop is closed"
+  );
+  if (msg === null) return;
+
+  await setDoc(
+    doc(db, "settings", "shop"),
+    { isOpen: false, message: msg },
+    { merge: true }
+  );
+}
+
   // 🔒 Prevent showing COMPLETED tokens in "Now Serving"
 useEffect(() => {
   if (!current || !selectedSession) return;
@@ -810,28 +837,40 @@ useEffect(() => {
     <div
       style={{
         fontWeight: 900,
-        color: shopOpen ? "#2ecc71" : "#ff6b6b",
+        // color: shopOpen ? "#2ecc71" : "#ff6b6b",
+        color: shop?.isOpen ? "#2ecc71" : "#ff6b6b",
+
         marginTop: 2
       }}
     >
-      {shopOpen ? "SHOP OPEN" : "SHOP CLOSED"}
+      {/* {shopOpen ? "SHOP OPEN" : "SHOP CLOSED"} */}
+      {shop?.isOpen ? "SHOP OPEN" : "SHOP CLOSED"}
+
     </div>
   </div>
 
   {/* Toggle Switch */}
   <div
     onClick={() => {
-      if (shopOpen) {
-        closeShop();
-      } else {
-        openShop();
-      }
+      // if (shopOpen) {
+      //   closeShop();
+      // } else {
+      //   openShop();
+      // }
+      if (shop?.isOpen) {
+  closeShop();
+} else {
+  openShop();
+}
+
     }}
     style={{
       width: 52,
       height: 28,
       borderRadius: 999,
-      background: shopOpen ? "#2ecc71" : "#555",
+      // background: shopOpen ? "#2ecc71" : "#555",
+      background: shop?.isOpen ? "#2ecc71" : "#555",
+
       position: "relative",
       cursor: "pointer",
       transition: "background 0.25s ease"
@@ -845,7 +884,9 @@ useEffect(() => {
         background: "#0b0b0b",
         position: "absolute",
         top: 3,
-        left: shopOpen ? 27 : 3,
+        // left: shopOpen ? 27 : 3,
+        left: shop?.isOpen ? 27 : 3,
+
         transition: "left 0.25s ease"
       }}
     />
