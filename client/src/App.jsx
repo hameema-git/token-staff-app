@@ -8,6 +8,8 @@ import PaymentCenter from "./pages/PaymentCenter.jsx";
 import StaffLogin from "./pages/StaffLogin";
 import Kitchen from "./pages/Kitchen";
 import StaffPlaceOrder from "./pages/StaffPlaceOrder";
+import MenuManage from "./pages/MenuManage";
+
 
 // ✅ NEW OWNER SUMMARY PAGE
 import OwnerSummary from "./pages/OwnerSummary.jsx";
