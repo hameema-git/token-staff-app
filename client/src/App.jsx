@@ -53,6 +53,10 @@ export default function App() {
   <StaffPlaceOrder />
 </Route>
 
+<Route path="/menu-manage">
+  <MenuManage />
+</Route>
+
       {/* Default → Login */}
       <Route path="/">
         <StaffLogin />

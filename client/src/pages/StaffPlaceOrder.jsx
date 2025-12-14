@@ -6,17 +6,12 @@ import {
   addDoc,
   doc,
   getDoc,
-  runTransaction
+  runTransaction,
+  onSnapshot,
+  query,
+  where,
+  orderBy
 } from "firebase/firestore";
-
-/* ---------------- MENU ---------------- */
-const MENU = [
-  { id: "w1", name: "Classic Belgian Waffle", price: 100, img: "/images/waffle1.jpeg" },
-  { id: "w2", name: "Strawberry Cream Waffle", price: 150, img: "/images/waffle2.jpeg" },
-  { id: "w3", name: "Nutella Chocolate Waffle", price: 180, img: "/images/waffle3.jpeg" },
-  { id: "w4", name: "Banana Caramel Waffle", price: 150, img: "/images/waffle4.jpeg" },
-  { id: "w5", name: "Blueberry Bliss Waffle", price: 180, img: "/images/waffle5.jpeg" }
-];
 
 const isDesktop = window.innerWidth >= 768;
 
@@ -35,7 +30,6 @@ const ui = {
     fontWeight: 900,
     position: "relative"
   },
-
   badge: {
     position: "absolute",
     top: -6,
@@ -60,11 +54,9 @@ const ui = {
     top: 0,
     bottom: 0,
     width: isDesktop ? 420 : "100%",
-    maxWidth: "100vw",
     background: "#0f0f0f",
     display: "flex",
     flexDirection: "column",
-    boxSizing: "border-box",
     overflow: "hidden"
   }
 };
@@ -73,13 +65,14 @@ const ui = {
 export default function StaffPlaceOrder() {
   const [, navigate] = useLocation();
 
+  const [menu, setMenu] = useState([]);
   const [cart, setCart] = useState([]);
   const [cartOpen, setCartOpen] = useState(false);
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [session, setSession] = useState("Session 1");
 
-  /* Load active session */
+  /* 🔹 Load active session */
   useEffect(() => {
     async function loadSession() {
       const snap = await getDoc(doc(db, "settings", "activeSession"));
@@ -88,17 +81,33 @@ export default function StaffPlaceOrder() {
     loadSession();
   }, []);
 
-  function add(i) {
+  /* 🔹 Load ACTIVE menu from Firestore */
+  useEffect(() => {
+    const q = query(
+      collection(db, "menu"),
+      where("active", "==", true),
+      orderBy("createdAt", "asc")
+    );
+
+    const unsub = onSnapshot(q, (snap) => {
+      setMenu(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    });
+
+    return () => unsub();
+  }, []);
+
+  /* ---------------- CART ---------------- */
+  function add(item) {
     setCart(c =>
-      c.find(x => x.id === i.id)
-        ? c.map(x => x.id === i.id ? { ...x, qty: x.qty + 1 } : x)
-        : [...c, { ...i, qty: 1 }]
+      c.find(x => x.id === item.id)
+        ? c.map(x => x.id === item.id ? { ...x, qty: x.qty + 1 } : x)
+        : [...c, { ...item, qty: 1 }]
     );
   }
 
   const total = cart.reduce((s, i) => s + i.price * i.qty, 0);
 
-  /* 🔥 STAFF PLACE ORDER (AUTO TOKEN + PAID) */
+  /* 🔥 STAFF PLACE ORDER (NO APPROVAL FLOW) */
   async function submit() {
     if (!cart.length) return;
 
@@ -127,14 +136,14 @@ export default function StaffPlaceOrder() {
         total,
         token: nextToken,
         paid: true,
-        status: "paid",
+        status: "paid",          // 🚀 goes directly to Kitchen
         source: "staff",
         session_id: session,
         paidAt: serverTimestamp(),
         approvedAt: serverTimestamp()
       });
 
-      alert(`Order placed. Token ${nextToken}`);
+      alert(`Order placed successfully\nToken: ${nextToken}`);
       navigate("/kitchen");
 
     } catch (err) {
@@ -143,6 +152,7 @@ export default function StaffPlaceOrder() {
     }
   }
 
+  /* ---------------- UI ---------------- */
   return (
     <div style={ui.page}>
       {/* HEADER */}
@@ -155,9 +165,9 @@ export default function StaffPlaceOrder() {
 
       {/* MENU */}
       <div style={ui.menuGrid}>
-        {MENU.map(m => (
+        {menu.map(m => (
           <div key={m.id} style={ui.card}>
-            <img src={m.img} style={ui.img} />
+            <img src={m.img || "/images/default.png"} style={ui.img} />
             <div style={{ flex: 1 }}>
               <b>{m.name}</b><br />₹{m.price}
             </div>
@@ -170,33 +180,38 @@ export default function StaffPlaceOrder() {
       {cartOpen && (
         <div style={ui.overlay} onClick={() => setCartOpen(false)}>
           <div style={ui.cartPanel} onClick={e => e.stopPropagation()}>
-            {/* HEADER */}
+
             <div style={{ padding: 16, borderBottom: "1px solid #222", display: "flex", justifyContent: "space-between" }}>
               <h3 style={{ margin: 0 }}>Cart</h3>
               <button onClick={() => setCartOpen(false)}>✕</button>
             </div>
 
-            {/* ITEMS */}
             <div style={{ flex: 1, overflowY: "auto", padding: 16 }}>
               {cart.map(i => (
                 <div key={i.id} style={{ marginBottom: 14 }}>
                   <b>{i.name}</b>
-                  <div style={{ fontSize: 14 }}>₹{i.price} × {i.qty}</div>
-                  <div style={{ marginTop: 6 }}>
-                    <button onClick={() => setCart(c => c.map(x => x.id === i.id ? { ...x, qty: Math.max(1, x.qty - 1) } : x))}>−</button>
-                    <span style={{ margin: "0 8px" }}>{i.qty}</span>
-                    <button onClick={() => setCart(c => c.map(x => x.id === i.id ? { ...x, qty: x.qty + 1 } : x))}>+</button>
-                  </div>
+                  <div>₹{i.price} × {i.qty}</div>
                 </div>
               ))}
             </div>
 
-            {/* FOOTER */}
             <div style={{ padding: 16, borderTop: "1px solid #222" }}>
-              <input placeholder="Customer Name (optional)" value={name} onChange={e => setName(e.target.value)} style={{ width: "100%", padding: 10, marginBottom: 8 }} />
-              <input placeholder="Phone (optional)" value={phone} onChange={e => setPhone(e.target.value)} style={{ width: "100%", padding: 10, marginBottom: 8 }} />
+              <input
+                placeholder="Customer Name (optional)"
+                value={name}
+                onChange={e => setName(e.target.value)}
+                style={{ width: "100%", padding: 10, marginBottom: 8 }}
+              />
+              <input
+                placeholder="Phone (optional)"
+                value={phone}
+                onChange={e => setPhone(e.target.value)}
+                style={{ width: "100%", padding: 10, marginBottom: 8 }}
+              />
 
-              <div style={{ fontWeight: 900, marginBottom: 10 }}>Total: ₹{total}</div>
+              <div style={{ fontWeight: 900, marginBottom: 10 }}>
+                Total: ₹{total}
+              </div>
 
               <button
                 onClick={submit}
@@ -213,6 +228,7 @@ export default function StaffPlaceOrder() {
                 Place Order (Paid)
               </button>
             </div>
+
           </div>
         </div>
       )}

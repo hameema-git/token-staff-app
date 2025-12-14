@@ -806,6 +806,10 @@ useEffect(() => {
         >
           Summary
         </button>
+        <button onClick={() => navigate("/menu-manage")}>
+  Manage Menu
+</button>
+
       </div>
     </div>
 
