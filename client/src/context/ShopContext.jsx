@@ -1,6 +1,8 @@
 import { createContext, useContext, useEffect, useState } from "react";
 import { doc, onSnapshot } from "firebase/firestore";
-import { db } from "../firebase";
+// import { db } from "../firebase";
+import { db } from "../firebaseInit";
+
 
 const ShopContext = createContext();
 
