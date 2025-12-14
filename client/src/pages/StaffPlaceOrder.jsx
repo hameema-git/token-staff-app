@@ -56,9 +56,17 @@ const ui = {
     width: isDesktop ? 420 : "100%",
     background: "#0f0f0f",
     display: "flex",
-    flexDirection: "column",
-    overflow: "hidden"
+    flexDirection: "column"
   }
+};
+
+const qtyBtn = {
+  background: "#ffd166",
+  border: "none",
+  borderRadius: 6,
+  padding: "6px 10px",
+  fontWeight: 900,
+  cursor: "pointer"
 };
 
 /* ---------------- COMPONENT ---------------- */
@@ -81,7 +89,7 @@ export default function StaffPlaceOrder() {
     loadSession();
   }, []);
 
-  /* 🔹 Load ACTIVE menu from Firestore */
+  /* 🔹 Load menu */
   useEffect(() => {
     const q = query(
       collection(db, "menu"),
@@ -89,14 +97,12 @@ export default function StaffPlaceOrder() {
       orderBy("createdAt", "asc")
     );
 
-    const unsub = onSnapshot(q, (snap) => {
+    return onSnapshot(q, snap => {
       setMenu(snap.docs.map(d => ({ id: d.id, ...d.data() })));
     });
-
-    return () => unsub();
   }, []);
 
-  /* ---------------- CART ---------------- */
+  /* ---------------- CART LOGIC ---------------- */
   function add(item) {
     setCart(c =>
       c.find(x => x.id === item.id)
@@ -105,9 +111,24 @@ export default function StaffPlaceOrder() {
     );
   }
 
+  function inc(id) {
+    setCart(c => c.map(x => x.id === id ? { ...x, qty: x.qty + 1 } : x));
+  }
+
+  function dec(id) {
+    setCart(c =>
+      c.map(x => x.id === id ? { ...x, qty: x.qty - 1 } : x)
+       .filter(x => x.qty > 0)
+    );
+  }
+
+  function remove(id) {
+    setCart(c => c.filter(x => x.id !== id));
+  }
+
   const total = cart.reduce((s, i) => s + i.price * i.qty, 0);
 
-  /* 🔥 STAFF PLACE ORDER (NO APPROVAL FLOW) */
+  /* 🔥 STAFF PLACE ORDER */
   async function submit() {
     if (!cart.length) return;
 
@@ -136,7 +157,7 @@ export default function StaffPlaceOrder() {
         total,
         token: nextToken,
         paid: true,
-        status: "paid",          // 🚀 goes directly to Kitchen
+        status: "paid",
         source: "staff",
         session_id: session,
         paidAt: serverTimestamp(),
@@ -155,7 +176,6 @@ export default function StaffPlaceOrder() {
   /* ---------------- UI ---------------- */
   return (
     <div style={ui.page}>
-      {/* HEADER */}
       <div style={ui.header}>
         <div style={ui.brand}>Staff Order</div>
         <button style={ui.cartBtn} onClick={() => setCartOpen(true)}>
@@ -188,9 +208,37 @@ export default function StaffPlaceOrder() {
 
             <div style={{ flex: 1, overflowY: "auto", padding: 16 }}>
               {cart.map(i => (
-                <div key={i.id} style={{ marginBottom: 14 }}>
-                  <b>{i.name}</b>
-                  <div>₹{i.price} × {i.qty}</div>
+                <div
+                  key={i.id}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 10,
+                    marginBottom: 14
+                  }}
+                >
+                  <div style={{ flex: 1 }}>
+                    <b>{i.name}</b><br />
+                    ₹{i.price * i.qty}
+                  </div>
+
+                  <button style={qtyBtn} onClick={() => dec(i.id)}>−</button>
+                  <b>{i.qty}</b>
+                  <button style={qtyBtn} onClick={() => inc(i.id)}>+</button>
+
+                  <button
+                    onClick={() => remove(i.id)}
+                    style={{
+                      background: "#8b0000",
+                      color: "#fff",
+                      border: "none",
+                      padding: "6px 10px",
+                      borderRadius: 6,
+                      fontWeight: 900
+                    }}
+                  >
+                    ✕
+                  </button>
                 </div>
               ))}
             </div>
