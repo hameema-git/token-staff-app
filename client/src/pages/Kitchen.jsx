@@ -219,10 +219,14 @@ export default function Kitchen() {
               <div style={{ marginTop: 6, color: "#ccc" }}>
                 {o.customerName} — {o.phone}
               </div>
+<div style={{ marginTop: 8, color: "#eee" }}>
+  {o.items.map((i, idx) => (
+    <div key={idx}>
+      {i.quantity} × {i.name}
+    </div>
+  ))}
+</div>
 
-              <div style={{ marginTop: 8, color: "#eee" }}>
-                {o.items.map((i) => `${i.quantity}×${i.name}`).join(", ")}
-              </div>
 
               <div style={{ marginTop: 8, color: "#ffd166" }}>
                 Amount: ₹{Number(o.total).toFixed(2)}
