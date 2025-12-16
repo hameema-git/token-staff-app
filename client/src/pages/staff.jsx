@@ -81,7 +81,7 @@ const styles = {
 , padding: 16, borderRadius: 10, width: "min(720px, 96%)", color: "#f6e8c1" },
   menuButton: { background: "transparent", color: "var(--primary)", border: "none", fontSize: 20, padding: 8 },
   drawer: { position: "fixed", top: 0, left: 0, height: "100%", width: 260, background: "var(--secondary)"
-, boxShadow: "2px 0 10px rgba(0,0,0,0.6)", zIndex: 10000, padding: 14 },
+, boxShadow: "2px 0 10px rgba(0,0,0,0.6)", zIndex: 10000, padding: 14 ,overflowY: "auto"},
   drawerClose: { position: "absolute", right: 10, top: 8, background: "transparent", border: "none", color: "var(--primary)", fontSize: 18 }
 };
 
