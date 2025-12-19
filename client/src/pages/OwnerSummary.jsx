@@ -28,16 +28,15 @@ const styles = {
   exportBtn: { background: "#ffd166", color: "#111" },
   deleteBtn: { background: "#551111", color: "#fff" },
   backBtn: {
-  background: "#222",
-  color: "#ffd166",
-  border: "1px solid #333",
-  padding: "8px 14px",
-  borderRadius: 20,
-  fontWeight: 800,
-  cursor: "pointer",
-  marginBottom: 12
-}
-
+    background: "#222",
+    color: "#ffd166",
+    border: "1px solid #333",
+    padding: "8px 14px",
+    borderRadius: 20,
+    fontWeight: 800,
+    cursor: "pointer",
+    marginBottom: 12
+  }
 };
 
 export default function OwnerSummary() {
@@ -54,13 +53,14 @@ export default function OwnerSummary() {
       const list = snap.docs
         .map(d => d.id.replace("session_", ""))
         .sort((a, b) => Number(a.split(" ")[1]) - Number(b.split(" ")[1]));
+
       setSessions(list);
       setSession(list[list.length - 1] || "");
     }
     loadSessions();
   }, []);
 
-  /* ---------------- LOAD SUMMARY ---------------- */
+  /* ---------------- LOAD SUMMARY (FIXED LOGIC) ---------------- */
   useEffect(() => {
     if (!session) return;
 
@@ -73,21 +73,33 @@ export default function OwnerSummary() {
       const snap = await getDocs(q);
       const data = snap.docs.map(d => d.data());
 
-      let totalAmount = 0;
+      let totalPaidAmount = 0;
       let paidCount = 0;
       let itemMap = {};
 
-      data.forEach(o => {
-        totalAmount += Number(o.total || 0);
-        if (o.paid) paidCount++;
+      data.forEach(order => {
+        if (order.paid === true) {
+          paidCount++;
+          totalPaidAmount += Number(order.total || 0);
 
-        (o.items || []).forEach(i => {
-          if (!itemMap[i.name]) {
-            itemMap[i.name] = { qty: 0, amount: 0 };
-          }
-          itemMap[i.name].qty += Number(i.quantity || 0);
-          itemMap[i.name].amount += Number(i.quantity || 0) * Number(i.price || 0);
-        });
+          const items = Array.isArray(order.items)
+            ? order.items
+            : order.items && typeof order.items === "object"
+              ? Object.values(order.items)
+              : [];
+
+          items.forEach(i => {
+            if (!itemMap[i.name]) {
+              itemMap[i.name] = { qty: 0, amount: 0 };
+            }
+
+            const qty = Number(i.quantity || 0);
+            const price = Number(i.price || 0);
+
+            itemMap[i.name].qty += qty;
+            itemMap[i.name].amount += qty * price;
+          });
+        }
       });
 
       setItemsSummary(itemMap);
@@ -95,7 +107,7 @@ export default function OwnerSummary() {
         orders: data.length,
         paid: paidCount,
         unpaid: data.length - paidCount,
-        totalAmount
+        totalAmount: totalPaidAmount
       });
     }
 
@@ -111,7 +123,7 @@ export default function OwnerSummary() {
       ["Total Orders", stats.orders],
       ["Paid Orders", stats.paid],
       ["Unpaid Orders", stats.unpaid],
-      ["Total Amount", stats.totalAmount],
+      ["Total Paid Amount", stats.totalAmount],
       [],
       ["Item", "Quantity Sold", "Revenue"],
       ...Object.entries(itemsSummary).map(([name, v]) => [
@@ -137,6 +149,7 @@ export default function OwnerSummary() {
 
     const q = query(collection(db, "orders"), where("session_id", "==", session));
     const snap = await getDocs(q);
+
     for (const d of snap.docs) {
       await deleteDoc(doc(db, "orders", d.id));
     }
@@ -151,12 +164,9 @@ export default function OwnerSummary() {
       <div style={styles.container}>
         <div style={styles.title}>Owner Summary</div>
 
-<button
-  style={styles.backBtn}
-  onClick={() => navigate("/staff")}
->
-  ← Back to Staff Dashboard
-</button>
+        <button style={styles.backBtn} onClick={() => navigate("/staff")}>
+          ← Back to Staff Dashboard
+        </button>
 
         <select
           value={session}
@@ -177,22 +187,22 @@ export default function OwnerSummary() {
                   <div style={styles.statValue}>{stats.orders}</div>
                 </div>
                 <div style={styles.statBox}>
-                  <div style={styles.statLabel}>Paid</div>
+                  <div style={styles.statLabel}>Paid Orders</div>
                   <div style={styles.statValue}>{stats.paid}</div>
                 </div>
                 <div style={styles.statBox}>
-                  <div style={styles.statLabel}>Unpaid</div>
+                  <div style={styles.statLabel}>Unpaid Orders</div>
                   <div style={styles.statValue}>{stats.unpaid}</div>
                 </div>
                 <div style={styles.statBox}>
-                  <div style={styles.statLabel}>Total Amount</div>
+                  <div style={styles.statLabel}>Total Paid Amount</div>
                   <div style={styles.statValue}>₹{stats.totalAmount}</div>
                 </div>
               </div>
             </div>
 
             <div style={styles.card}>
-              <h3>Item-wise Sales</h3>
+              <h3>Item-wise Paid Sales</h3>
               <table style={styles.table}>
                 <thead>
                   <tr>
