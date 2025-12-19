@@ -101,6 +101,9 @@ export default function StaffDashboard() {
   const [current, setCurrent] = useState(0);
   const [lastIssued, setLastIssued] = useState(0);
   const [skipped, setSkipped] = useState([]);
+  const [showItemSummary, setShowItemSummary] = useState(false);
+  const [itemSummary, setItemSummary] = useState([]);
+
 
   // orders (staff sees only pending)
   const [orders, setOrders] = useState([]);
@@ -218,6 +221,49 @@ export default function StaffDashboard() {
     { merge: true }
   );
 }
+
+async function loadItemSummary() {
+  try {
+    const sess = selectedSession || session;
+
+    const q = query(
+      collection(db, "orders"),
+      where("session_id", "==", sess)
+    );
+
+    const snap = await getDocs(q);
+
+    const summary = {};
+
+    snap.docs.forEach(d => {
+      const order = d.data();
+      const isCompleted = order.status === "completed";
+
+      (order.items || []).forEach(i => {
+        if (!summary[i.name]) {
+          summary[i.name] = { ordered: 0, completed: 0 };
+        }
+        summary[i.name].ordered += i.quantity || 1;
+        if (isCompleted) {
+          summary[i.name].completed += i.quantity || 1;
+        }
+      });
+    });
+
+    const result = Object.entries(summary).map(([name, v]) => ({
+      name,
+      ordered: v.ordered,
+      completed: v.completed
+    }));
+
+    setItemSummary(result);
+    setShowItemSummary(true);
+  } catch (err) {
+    console.error("Item summary", err);
+    alert("Failed to load item summary");
+  }
+}
+
 
 
   // async function closeShop() {
@@ -726,6 +772,14 @@ useEffect(() => {
           </div>
         </div>
 
+        <button
+  style={{ ...styles.btn, background: "#333", color: "var(--primary)" }}
+  onClick={loadItemSummary}
+>
+  📦 Item Summary
+</button>
+
+
         {/* live area */}
         <div style={styles.liveCard}>
           <div style={styles.nowServingWrap}>
@@ -826,6 +880,49 @@ useEffect(() => {
             </div>
           ))}
         </div>
+
+
+        {showItemSummary && (
+  <div style={styles.modalBackdrop} onClick={() => setShowItemSummary(false)}>
+    <div style={styles.modal} onClick={e => e.stopPropagation()}>
+      <h3 style={{ marginBottom: 12, color: "var(--primary)" }}>
+        Item Summary — {selectedSession || session}
+      </h3>
+
+      {itemSummary.length === 0 && (
+        <div style={{ color: "#bfb39a" }}>No orders yet</div>
+      )}
+
+      {itemSummary.map((i, idx) => (
+        <div
+          key={idx}
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            padding: "8px 0",
+            borderBottom: "1px solid #222"
+          }}
+        >
+          <div style={{ fontWeight: 800 }}>{i.name}</div>
+          <div style={{ textAlign: "right" }}>
+            <div>Ordered: <b>{i.ordered}</b></div>
+            <div style={{ color: "#2ecc71" }}>
+              Completed: <b>{i.completed}</b>
+            </div>
+          </div>
+        </div>
+      ))}
+
+      <button
+        style={{ ...styles.btn, background: "#222", color: "var(--primary)", marginTop: 14 }}
+        onClick={() => setShowItemSummary(false)}
+      >
+        Close
+      </button>
+    </div>
+  </div>
+)}
+
 
      {/* Drawer / menu */}
 {drawerOpen && (
